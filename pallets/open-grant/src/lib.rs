@@ -137,6 +137,7 @@ decl_event!(
 		GrantCanceled(GrantRoundIndex, ProjectIndex),
 		GrantWithdrawn(GrantRoundIndex, ProjectIndex, Balance, Balance),
 		GrantAllowedWithdraw(GrantRoundIndex, ProjectIndex),
+		RoundCanceled(GrantRoundIndex),
 	}
 );
 
@@ -249,10 +250,10 @@ decl_module! {
 		pub fn cancel_round(origin) {
 			let now = <frame_system::Module<T>>::block_number();
 			let count = GrantRoundCount::get();
-			let round = <GrantRounds<T>>::get(count-1).unwrap();
+			let round = <GrantRounds<T>>::get(count-1).ok_or(Error::<T>::NoActiveRound)?;
 
 			// Ensure current round is not processing
-			ensure!(round.end < now, Error::<T>::RoundProcessing);
+			ensure!(round.start > now, Error::<T>::RoundProcessing);
 
 			GrantRoundCount::put(count-1);
 			// Refund
@@ -262,6 +263,8 @@ decl_module! {
 				round.matching_fund,
 				ExistenceRequirement::AllowDeath
 			)?;
+
+			Self::deposit_event(RawEvent::RoundCanceled(count-1));
 		}
 
 		/// Contribute a grant
@@ -430,7 +433,6 @@ decl_module! {
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
-			ensure!(round_index > 0, Error::<T>::NoActiveRound);
 			let round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			let mut grants = round.grants;
 
@@ -448,6 +450,7 @@ decl_module! {
 
 			// This grant must not have canceled
 			ensure!(!grant.is_canceled, Error::<T>::NoActiveGrant);
+			ensure!(!grant.is_allowed_withdraw, Error::<T>::NoActiveGrant);
 
 			for contribution in grant.contributions.iter() {
 				T::Currency::transfer(
