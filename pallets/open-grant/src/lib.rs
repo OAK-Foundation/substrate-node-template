@@ -16,7 +16,7 @@ use sp_runtime::{
 	ModuleId,
 };
 
-use frame_system::ensure_signed;
+use frame_system::{ensure_signed};
 use sp_std::prelude::*;
 use sp_std::{convert::{TryInto}};
 use integer_sqrt::IntegerSquareRoot;
@@ -247,8 +247,13 @@ decl_module! {
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel_round(origin) {
-			let count = ProjectCount::get();
+			let now = <frame_system::Module<T>>::block_number();
+			let count = GrantRoundCount::get();
 			let round = <GrantRounds<T>>::get(count-1).unwrap();
+
+			// Ensure current round is not processing
+			ensure!(round.end < now, Error::<T>::RoundProcessing);
+
 			GrantRoundCount::put(count-1);
 			// Refund
 			T::Currency::transfer(
@@ -266,11 +271,13 @@ decl_module! {
 			let now = <frame_system::Module<T>>::block_number();
 			
 			// round list must be not none
-			let round_index = ProjectCount::get() - 1;
+			let round_index = GrantRoundCount::get();
+			
 			ensure!(round_index > 0, Error::<T>::NoActiveRound);
 			// The round must be in progress
-			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
-			ensure!(round.end < now, Error::<T>::NoActiveRound);
+			let mut round = <GrantRounds<T>>::get(round_index-1).ok_or(Error::<T>::NoActiveRound)?;
+			ensure!(round.start < now, Error::<T>::NoActiveRound);
+			ensure!(round.end > now, Error::<T>::NoActiveRound);
 
 			// Find grant by index
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
