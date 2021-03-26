@@ -122,6 +122,8 @@ decl_storage! {
 
 		GrantRounds get(fn grant_rounds): map hasher(blake2_128_concat) GrantRoundIndex => Option<GrantRoundOf<T>>;
 		GrantRoundCount get(fn grant_round_count): GrantRoundIndex;
+
+		MaxRoundProjects get(fn max_round_projects): u32;
 	}
 }
 
@@ -440,8 +442,8 @@ decl_module! {
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
-			let round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
-			let mut grants = round.grants;
+			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let grants = &mut round.grants;
 
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
 
@@ -469,6 +471,8 @@ decl_module! {
 			}
 
 			grant.is_canceled = true;
+
+			<GrantRounds<T>>::insert(round_index, round);
 
 			Self::deposit_event(RawEvent::GrantCanceled(round_index, project_index));
 		}
