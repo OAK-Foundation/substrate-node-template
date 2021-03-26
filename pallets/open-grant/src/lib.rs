@@ -294,40 +294,43 @@ decl_module! {
 			// Find previous contribution by account_id
 			// If you have contributed before, then add to that contribution. Otherwise join the list.
 			let mut found_contribution: Option<&mut ContributionOf::<T>> = None;
-			match found_grant {
-				None => Err(Error::<T>::NoActiveGrant)?,
-				Some(ref mut grant) => {
-					for contribution in grant.contributions.iter_mut() {
-						debug::debug!("contribution.account_id: {:#?}", contribution.account_id);
-						debug::debug!("who: {:#?}", who);
-						if contribution.account_id == who {
-							found_contribution = Some(contribution);
-							break;
-						}
-					}
-					match found_contribution {
-						Some(contribution) => {
-							contribution.value += value;
-							debug::debug!("contribution.value: {:#?}", contribution.value);
-						},
-						None => {
-							grant.contributions.push(ContributionOf::<T> {
-								account_id: who.clone(),
-								value: value,
-							});
-							debug::debug!("contributions: {:#?}", grant.contributions);
-						}
-					}
 
-					// Transfer contribute to grant account
-					T::Currency::transfer(
-						&who,
-						&Self::project_account_id(project_index),
-						value,
-						ExistenceRequirement::AllowDeath
-					)?;
-				},
+			let grant = found_grant.ok_or(Error::<T>::NoActiveRound)?;
+
+			for contribution in grant.contributions.iter_mut() {
+				debug::debug!("contribution.account_id: {:#?}", contribution.account_id);
+				debug::debug!("who: {:#?}", who);
+				if contribution.account_id == who {
+					found_contribution = Some(contribution);
+					break;
+				}
 			}
+
+			match found_contribution {
+				Some(contribution) => {
+					contribution.value += value;
+					debug::debug!("contribution.value: {:#?}", contribution.value);
+				},
+				None => {
+					grant.contributions.push(ContributionOf::<T> {
+						account_id: who.clone(),
+						value: value,
+					});
+					debug::debug!("contributions: {:#?}", grant.contributions);
+				}
+			}
+
+			// Transfer contribute to grant account
+			T::Currency::transfer(
+				&who,
+				&Self::project_account_id(project_index),
+				value,
+				ExistenceRequirement::AllowDeath
+			)?;
+
+			debug::debug!("grant: {:#?}", grant);
+
+			<GrantRounds<T>>::insert(round_index-1, round);
 
 			Self::deposit_event(RawEvent::ContributeSucceed(who, project_index, value, now));
 		}
@@ -335,9 +338,8 @@ decl_module! {
 		// Distribute fund from grant
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn allow_withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
-			ensure!(round_index > 0, Error::<T>::NoActiveRound);
-			let round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
-			let mut grants = round.grants;
+			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let grants = &mut round.grants;
 
 			// The round must have ended
 			let now = <frame_system::Module<T>>::block_number();
@@ -357,14 +359,17 @@ decl_module! {
 			// set is_allowed_withdraw
 			grant.is_allowed_withdraw = true;
 
+			debug::debug!("round: {:#?}", round);
+
+			<GrantRounds<T>>::insert(round_index, round.clone());
+
 			Self::deposit_event(RawEvent::GrantAllowedWithdraw(round_index, project_index));
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
-			ensure!(round_index > 0, Error::<T>::NoActiveRound);
-			let round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
-			let mut grants = round.grants;
+			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let grants = &mut round.grants;
 
 			// Calculate CLR(Capital-constrained Liberal Radicalism) for grant
 			let mut grant_clrs = Vec::new();
@@ -427,6 +432,8 @@ decl_module! {
 
 			// Set is_withdrawn
 			grant.is_withdrawn = true;
+
+			<GrantRounds<T>>::insert(round_index, round.clone());
 
 			Self::deposit_event(RawEvent::GrantWithdrawn(round_index, project_index, grant_matching_fund, contribution_fund));
 		}
