@@ -160,6 +160,7 @@ decl_error! {
 		NoActiveRound,
 		NoActiveGrant,
 		InvalidParam,
+		GrantCanceled,
 	}
 }
 
@@ -279,6 +280,7 @@ decl_module! {
 			let round_index = GrantRoundCount::get();
 			
 			ensure!(round_index > 0, Error::<T>::NoActiveRound);
+			
 			// The round must be in progress
 			let mut round = <GrantRounds<T>>::get(round_index-1).ok_or(Error::<T>::NoActiveRound)?;
 			ensure!(round.start < now, Error::<T>::NoActiveRound);
@@ -293,12 +295,12 @@ decl_module! {
 				}
 			}
 
+			let grant = found_grant.ok_or(Error::<T>::NoActiveRound)?;
+			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
+
 			// Find previous contribution by account_id
 			// If you have contributed before, then add to that contribution. Otherwise join the list.
 			let mut found_contribution: Option<&mut ContributionOf::<T>> = None;
-
-			let grant = found_grant.ok_or(Error::<T>::NoActiveRound)?;
-
 			for contribution in grant.contributions.iter_mut() {
 				debug::debug!("contribution.account_id: {:#?}", contribution.account_id);
 				debug::debug!("who: {:#?}", who);
@@ -356,7 +358,9 @@ decl_module! {
 				}
 			}
 			let mut grant = found_grant.ok_or(Error::<T>::NoActiveGrant)?;
-			ensure!(!grant.is_canceled, Error::<T>::NoActiveGrant);
+
+			// Can't let users vote in the cancered round
+			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 
 			// set is_allowed_withdraw
 			grant.is_allowed_withdraw = true;
@@ -407,7 +411,7 @@ decl_module! {
 			// This grant must not have distributed funds
 			ensure!(grant.is_allowed_withdraw, Error::<T>::NoActiveGrant);
 			ensure!(!grant.is_withdrawn, Error::<T>::NoActiveGrant);
-			ensure!(!grant.is_canceled, Error::<T>::NoActiveGrant);
+			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 
 			// Calculate CLR
 			let grant_clr = grant_clrs[grant_index];
@@ -458,7 +462,7 @@ decl_module! {
 			let grant = found_grant.ok_or(Error::<T>::NoActiveGrant)?;
 
 			// This grant must not have canceled
-			ensure!(!grant.is_canceled, Error::<T>::NoActiveGrant);
+			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 			ensure!(!grant.is_allowed_withdraw, Error::<T>::NoActiveGrant);
 
 			for contribution in grant.contributions.iter() {
