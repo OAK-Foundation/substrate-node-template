@@ -161,6 +161,8 @@ decl_error! {
 		NoActiveGrant,
 		InvalidParam,
 		GrantCanceled,
+		GrantWithdrawn,
+		GrantNotAllowWithdraw,
 	}
 }
 
@@ -295,7 +297,7 @@ decl_module! {
 				}
 			}
 
-			let grant = found_grant.ok_or(Error::<T>::NoActiveRound)?;
+			let grant = found_grant.ok_or(Error::<T>::NoActiveGrant)?;
 			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 
 			// Find previous contribution by account_id
@@ -347,7 +349,7 @@ decl_module! {
 
 			// The round must have ended
 			let now = <frame_system::Module<T>>::block_number();
-			ensure!(round.end < now, Error::<T>::NoActiveRound);
+			ensure!(round.end < now, Error::<T>::RoundProcessing);
 
 			// Find grant from list
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
@@ -409,8 +411,8 @@ decl_module! {
 			let mut grant = &mut grants[grant_index];
 
 			// This grant must not have distributed funds
-			ensure!(grant.is_allowed_withdraw, Error::<T>::NoActiveGrant);
-			ensure!(!grant.is_withdrawn, Error::<T>::NoActiveGrant);
+			ensure!(grant.is_allowed_withdraw, Error::<T>::GrantNotAllowWithdraw);
+			ensure!(!grant.is_withdrawn, Error::<T>::GrantWithdrawn);
 			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 
 			// Calculate CLR
