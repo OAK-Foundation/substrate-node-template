@@ -52,6 +52,7 @@ pub struct GrantRound<AccountId, Balance, BlockNumber> {
 	matching_fund: Balance,
 	grants: Vec<Grant<AccountId, Balance>>,
 	funder: AccountId,
+	is_canceled: bool,
 }
 
 impl<AccountId, Balance, BlockNumber> GrantRound<AccountId, Balance, BlockNumber> {
@@ -62,6 +63,7 @@ impl<AccountId, Balance, BlockNumber> GrantRound<AccountId, Balance, BlockNumber
 			matching_fund: matching_fund,
 			grants: Vec::new(),
 			funder: funder,
+			is_canceled: false,
 		};
 
 		// Fill in the grants structure in advance
@@ -163,6 +165,9 @@ decl_error! {
 		GrantCanceled,
 		GrantWithdrawn,
 		GrantNotAllowWithdraw,
+		StartBlockNumberTooSmall,
+		RoundNotProcessing,
+		RoundCanceled,
 	}
 }
 
@@ -219,19 +224,31 @@ decl_module! {
 		pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>) {
 			let who = ensure_signed(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
-			let index = GrantRoundCount::get();
 
 			// The end block must be greater than the start block
 			ensure!(end > start, Error::<T>::EndTooEarly);
 			// Both the starting block number and the ending block number must be greater than the current number of blocks
 			ensure!(start > now, Error::<T>::StartBlockNumberInvalid);
 			ensure!(end > now, Error::<T>::EndBlockNumberInvalid);
-			// Make sure the last round is over
-			if index != 0 {
+
+			// The start time must be greater than the end time of the last valid round
+			let mut last_valid_round: Option<GrantRoundOf::<T>> = None;
+			let index = GrantRoundCount::get();
+			for _i in (0..index).rev() {
 				let round = <GrantRounds<T>>::get(index-1).unwrap();
-				ensure!(now > round.end, Error::<T>::RoundProcessing);
+				if !round.is_canceled {
+					last_valid_round = Some(round);
+					break;
+				}
 			}
 			
+			match last_valid_round {
+				Some(round) => {
+					ensure!(start > round.end, Error::<T>::StartBlockNumberTooSmall);
+				},
+				None => {}
+			}
+
 			let next_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
 
 			let round = GrantRoundOf::<T>::new(start, end, matching_fund, project_indexes, who.clone());
@@ -252,15 +269,17 @@ decl_module! {
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn cancel_round(origin) {
+		pub fn cancel_round(origin, round_index: GrantRoundIndex) {
 			let now = <frame_system::Module<T>>::block_number();
 			let count = GrantRoundCount::get();
-			let round = <GrantRounds<T>>::get(count-1).ok_or(Error::<T>::NoActiveRound)?;
+			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
-			// Ensure current round is not processing
+			// Ensure current round is not processed
 			ensure!(round.start > now, Error::<T>::RoundProcessing);
 
-			GrantRoundCount::put(count-1);
+			round.is_canceled = true;
+			<GrantRounds<T>>::insert(round_index, round.clone());
+
 			// Refund
 			T::Currency::transfer(
 				&Self::account_id(),
@@ -280,13 +299,18 @@ decl_module! {
 			
 			// round list must be not none
 			let round_index = GrantRoundCount::get();
-			
 			ensure!(round_index > 0, Error::<T>::NoActiveRound);
-			
-			// The round must be in progress
-			let mut round = <GrantRounds<T>>::get(round_index-1).ok_or(Error::<T>::NoActiveRound)?;
-			ensure!(round.start < now, Error::<T>::NoActiveRound);
-			ensure!(round.end > now, Error::<T>::NoActiveRound);
+
+			// Find processing round
+			let mut processing_round: Option<GrantRoundOf::<T>> = None;
+			for i in (0..round_index).rev() {
+				let round = <GrantRounds<T>>::get(i).unwrap();
+				if !round.is_canceled && round.start < now && round.end > now {
+					processing_round = Some(round);
+				}
+			}
+
+			let mut round = processing_round.ok_or(Error::<T>::RoundNotProcessing)?;
 
 			// Find grant by index
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
@@ -345,6 +369,7 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn allow_withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 			let grants = &mut round.grants;
 
 			// The round must have ended
@@ -377,6 +402,7 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 			let grants = &mut round.grants;
 
 			// Calculate CLR(Capital-constrained Liberal Radicalism) for grant
