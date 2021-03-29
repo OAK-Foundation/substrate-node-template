@@ -42,7 +42,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balan
 type ProjectOf<T> = Project<AccountIdOf<T>>;
 type ContributionOf<T> = Contribution<AccountIdOf<T>, BalanceOf<T>>;
 type GrantRoundOf<T> = GrantRound<AccountIdOf<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
-type GrantOf<T> = Grant<AccountIdOf<T>, BalanceOf<T>>;
+type GrantOf<T> = Grant<AccountIdOf<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
 
 /// Grant Round struct
 #[derive(Encode, Decode, Default, PartialEq, Eq, Clone, Debug)]
@@ -82,12 +82,13 @@ impl<AccountId, Balance, BlockNumber> GrantRound<AccountId, Balance, BlockNumber
 
 // Grant in round
 #[derive(Encode, Decode, Default, PartialEq, Eq, Clone, Debug)]
-pub struct Grant<AccountId, Balance> {
+pub struct Grant<AccountId, Balance, BlockNumber> {
 	project_index: ProjectIndex,
 	contributions: Vec<Contribution<AccountId, Balance>>,
 	is_allowed_withdraw: bool,
 	is_canceled: bool,
 	is_withdrawn: bool,
+	withdrawal_period: BlockNumber,
 }
 
 /// Grant struct
@@ -123,7 +124,8 @@ decl_storage! {
 		GrantRounds get(fn grant_rounds): map hasher(blake2_128_concat) GrantRoundIndex => Option<GrantRoundOf<T>>;
 		GrantRoundCount get(fn grant_round_count): GrantRoundIndex;
 
-		MaxRoundGrants get(fn max_round_grants) config(max_round_grants_value): u32;
+		MaxRoundGrants get(fn max_round_grants) config(init_max_round_grants): u32;
+		WithdrawalPeriod get(fn withdrawal_period) config(init_withdrawal_period): T::BlockNumber;
 	}
 }
 
@@ -164,6 +166,7 @@ decl_error! {
 		GrantWithdrawn,
 		GrantNotAllowWithdraw,
 		GrantAmountExceed,
+		WithdrawalPeriodExceed,
 	}
 }
 
@@ -348,6 +351,7 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn allow_withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let now = <frame_system::Module<T>>::block_number();
 			let grants = &mut round.grants;
 
 			// The round must have ended
@@ -369,6 +373,7 @@ decl_module! {
 
 			// set is_allowed_withdraw
 			grant.is_allowed_withdraw = true;
+			grant.withdrawal_period = now + WithdrawalPeriod::get().unwrap();
 
 			debug::debug!("round: {:#?}", round);
 
@@ -380,7 +385,10 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let now = <frame_system::Module<T>>::block_number();
 			let grants = &mut round.grants;
+
+			ensure!(now > grant.withdrawal_period, Error::<T>::WithdrawalPeriodExceed);
 
 			// Calculate CLR(Capital-constrained Liberal Radicalism) for grant
 			let mut grant_clrs = Vec::new();
@@ -443,6 +451,7 @@ decl_module! {
 
 			// Set is_withdrawn
 			grant.is_withdrawn = true;
+			grant.withdrawal_period = now + WithdrawalPeriod::get().unwrap();
 
 			<GrantRounds<T>>::insert(round_index, round.clone());
 
@@ -489,6 +498,11 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_max_round_grants(origin, max_round_grants: u32) {
 			MaxRoundGrants::put(max_round_grants);
+		}
+
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		pub fn set_withdrawal_period(origin, withdrawal_period: u32) {
+			WithdrawalPeriod::put(withdrawal_period);
 		}
 	}
 }
