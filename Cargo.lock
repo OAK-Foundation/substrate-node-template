@@ -3827,6 +3827,7 @@ dependencies = [
  "integer-sqrt",
  "linked-hash-map",
  "parity-scale-codec",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",

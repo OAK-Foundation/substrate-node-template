@@ -26,6 +26,7 @@ sp-runtime = { default-features = false, version = '3.0.0' }
 sp-core = { default-features = false, version = '3.0.0' }
 integer-sqrt = { default-features = false, version = '0.1.5' }
 linked-hash-map = { default-features = false, version = '0.5.4' }
+serde = { version = "1.0.119" }
 
 [dev-dependencies]
 sp-core = { default-features = false, version = '3.0.0' }

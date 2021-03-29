@@ -114,7 +114,7 @@ decl_storage! {
 	// A unique name is used to ensure that the pallet's storage items are isolated.
 	// This name may be updated, but each pallet in the runtime must use a unique name.
 	// ---------------------------------vvvvvvvvvvvvvv
-	trait Store for Module<T: Config> as OpenGrantModule {
+	trait Store for Module<T: Config> as OpenGrant {
 		// Learn more about declaring storage items:
 		// https://substrate.dev/docs/en/knowledgebase/runtime/storage#declaring-storage-items
 		Projects get(fn grants): map hasher(blake2_128_concat) ProjectIndex => Option<ProjectOf<T>>;
@@ -123,7 +123,7 @@ decl_storage! {
 		GrantRounds get(fn grant_rounds): map hasher(blake2_128_concat) GrantRoundIndex => Option<GrantRoundOf<T>>;
 		GrantRoundCount get(fn grant_round_count): GrantRoundIndex;
 
-		MaxRoundProjects get(fn max_round_projects): u32;
+		MaxRoundGrants get(fn max_round_grants) config(max_round_grants_value): u32;
 	}
 }
 
@@ -163,6 +163,7 @@ decl_error! {
 		GrantCanceled,
 		GrantWithdrawn,
 		GrantNotAllowWithdraw,
+		GrantAmountExceed,
 	}
 }
 
@@ -221,6 +222,8 @@ decl_module! {
 			let now = <frame_system::Module<T>>::block_number();
 			let index = GrantRoundCount::get();
 
+			// The number of items cannot exceed the maximum
+			ensure!(project_indexes.len() <= MaxRoundGrants::get().try_into().unwrap(), Error::<T>::GrantAmountExceed);
 			// The end block must be greater than the start block
 			ensure!(end > start, Error::<T>::EndTooEarly);
 			// Both the starting block number and the ending block number must be greater than the current number of blocks
@@ -481,6 +484,11 @@ decl_module! {
 			<GrantRounds<T>>::insert(round_index, round);
 
 			Self::deposit_event(RawEvent::GrantCanceled(round_index, project_index));
+		}
+
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		pub fn set_max_round_grants(origin, max_round_grants: u32) {
+			MaxRoundGrants::put(max_round_grants);
 		}
 	}
 }
