@@ -16,7 +16,7 @@ use sp_runtime::{
 	ModuleId,
 };
 
-use frame_system::{ensure_signed};
+use frame_system::{ensure_signed, ensure_root, };
 use sp_std::prelude::*;
 use sp_std::{convert::{TryInto}};
 use integer_sqrt::IntegerSquareRoot;
@@ -163,6 +163,7 @@ decl_error! {
 		GrantCanceled,
 		GrantWithdrawn,
 		GrantNotAllowWithdraw,
+		InvalidAccount,
 	}
 }
 
@@ -217,6 +218,7 @@ decl_module! {
 		/// grant_indexes: the grants were selected for this round
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>) {
+			ensure_root(origin.clone())?;
 			let who = ensure_signed(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let index = GrantRoundCount::get();
@@ -253,6 +255,7 @@ decl_module! {
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel_round(origin) {
+			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let count = GrantRoundCount::get();
 			let round = <GrantRounds<T>>::get(count-1).ok_or(Error::<T>::NoActiveRound)?;
@@ -344,6 +347,7 @@ decl_module! {
 		// Distribute fund from grant
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn allow_withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
+			ensure_root(origin.clone())?;
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			let grants = &mut round.grants;
 
@@ -376,6 +380,12 @@ decl_module! {
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
+			let who = ensure_signed(origin)?;
+
+			// Only project owner can withdraw
+			let project = Projects::<T>::get(project_index).ok_or(Error::<T>::NoActiveGrant)?;
+			ensure!(who == project.owner, Error::<T>::InvalidAccount);
+
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			let grants = &mut round.grants;
 
@@ -417,7 +427,6 @@ decl_module! {
 
 			// Calculate CLR
 			let grant_clr = grant_clrs[grant_index];
-			let project = Projects::<T>::get(project_index).ok_or(Error::<T>::NoActiveGrant)?;
 			let grant_matching_fund = ((grant_clr as f64 / total_clr as f64) * matching_fund as f64) as u128;
 
 			// Distribute CLR amount
@@ -448,6 +457,8 @@ decl_module! {
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
+			ensure_root(origin.clone())?;
+
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			let grants = &mut round.grants;
 
