@@ -51,6 +51,7 @@ pallet-elections-phragmen = { version = "3.0.0", default-features = false }
 pallet-treasury = { version = "3.0.0", default-features = false }
 pallet-tips = { version = "3.0.0", default-features = false }
 pallet-bounties = { version = "3.0.0", default-features = false }
+pallet-identity = { default-features = false, version = '3.0.0' }
 sp-api = { default-features = false, version = '3.0.0' }
 sp-block-builder = { default-features = false, version = '3.0.0' }
 sp-consensus-aura = { default-features = false, version = '0.9.0' }
@@ -99,6 +100,7 @@ std = [
     "pallet-treasury/std",
     "pallet-tips/std",
     "pallet-bounties/std",
+    "pallet-identity/std",
     'sp-api/std',
     'sp-block-builder/std',
     'sp-consensus-aura/std',
