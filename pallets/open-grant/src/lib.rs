@@ -187,7 +187,7 @@ decl_module! {
 			let identity = pallet_identity::Module::<T>::identity(who.clone()).ok_or(Error::<T>::IdentityNeeded)?;
 
 			let mut is_found_judgement = false;
-			for judgement in identity.judgements {
+			for judgement in identity.judgements.iter() {
 				if judgement.1 == pallet_identity::Judgement::Reasonable || judgement.1 == pallet_identity::Judgement::KnownGood {
 					is_found_judgement = true;
 					break;
