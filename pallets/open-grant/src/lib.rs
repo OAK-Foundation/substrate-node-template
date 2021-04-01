@@ -185,9 +185,17 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			let identity = pallet_identity::Module::<T>::identity(who.clone()).ok_or(Error::<T>::IdentityNeeded)?;
-			ensure!(identity.judgements.len() > 0, Error::<T>::IdentityNeeded);
 
-			// debug::debug!("len: {:#?}", identity.judgements.len());
+			let mut is_found_judgement = false;
+			for judgement in identity.judgements {
+				if judgement.1 == pallet_identity::Judgement::Reasonable || judgement.1 == pallet_identity::Judgement::KnownGood {
+					is_found_judgement = true;
+					break;
+				}
+			}
+
+			ensure!(is_found_judgement, Error::<T>::IdentityNeeded);
+
 			debug::debug!("identity: {:#?}", identity);
 			debug::debug!("name: {:#?}", name);
 			debug::debug!("logo: {:#?}", logo);
