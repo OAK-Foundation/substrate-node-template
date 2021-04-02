@@ -50,11 +50,11 @@ pub struct GrantRound<AccountId, Balance, BlockNumber> {
 	start: BlockNumber,
 	end: BlockNumber,
 	matching_fund: Balance,
-	grants: Vec<Grant<AccountId, Balance>>,
+	grants: Vec<Grant<AccountId, Balance, BlockNumber>>,
 	funder: AccountId,
 }
 
-impl<AccountId, Balance, BlockNumber> GrantRound<AccountId, Balance, BlockNumber> {
+impl<AccountId, Balance, BlockNumber: From<u32>> GrantRound<AccountId, Balance, BlockNumber> {
     fn new(start: BlockNumber, end: BlockNumber, matching_fund: Balance, project_indexes: Vec<ProjectIndex>, funder: AccountId) -> GrantRound<AccountId, Balance, BlockNumber> { 
 		let mut grant_round  = GrantRound {
 			start: start,
@@ -72,7 +72,7 @@ impl<AccountId, Balance, BlockNumber> GrantRound<AccountId, Balance, BlockNumber
 				is_allowed_withdraw: false,
 				is_canceled: false,
 				is_withdrawn: false,
-
+				withdrawal_period: (0 as u32).into(), 
 			});
 		}
 
@@ -351,7 +351,6 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn allow_withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
-			let now = <frame_system::Module<T>>::block_number();
 			let grants = &mut round.grants;
 
 			// The round must have ended
@@ -373,7 +372,7 @@ decl_module! {
 
 			// set is_allowed_withdraw
 			grant.is_allowed_withdraw = true;
-			grant.withdrawal_period = now + WithdrawalPeriod::get().unwrap();
+			grant.withdrawal_period = now + <WithdrawalPeriod<T>>::get();
 
 			debug::debug!("round: {:#?}", round);
 
@@ -387,8 +386,6 @@ decl_module! {
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let grants = &mut round.grants;
-
-			ensure!(now > grant.withdrawal_period, Error::<T>::WithdrawalPeriodExceed);
 
 			// Calculate CLR(Capital-constrained Liberal Radicalism) for grant
 			let mut grant_clrs = Vec::new();
@@ -420,6 +417,7 @@ decl_module! {
 
 			let grant_index = grant_index.ok_or(Error::<T>::NoActiveGrant)?;
 			let mut grant = &mut grants[grant_index];
+			ensure!(now > grant.withdrawal_period, Error::<T>::WithdrawalPeriodExceed);
 
 			// This grant must not have distributed funds
 			ensure!(grant.is_allowed_withdraw, Error::<T>::GrantNotAllowWithdraw);
@@ -451,7 +449,7 @@ decl_module! {
 
 			// Set is_withdrawn
 			grant.is_withdrawn = true;
-			grant.withdrawal_period = now + WithdrawalPeriod::get().unwrap();
+			grant.withdrawal_period = now + <WithdrawalPeriod<T>>::get();
 
 			<GrantRounds<T>>::insert(round_index, round.clone());
 
@@ -501,8 +499,8 @@ decl_module! {
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn set_withdrawal_period(origin, withdrawal_period: u32) {
-			WithdrawalPeriod::put(withdrawal_period);
+		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
+			<WithdrawalPeriod<T>>::put(withdrawal_period);
 		}
 	}
 }
