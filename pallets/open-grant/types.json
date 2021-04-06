@@ -15,7 +15,8 @@
       "contributions": "Vec<Contribution>",
       "is_allowed_withdraw": "bool",
       "is_canceled": "bool",
-      "is_withdrawn": "bool"
+      "is_withdrawn": "bool",
+      "withdrawal_period": "BlockNumber"
     },
     "Contribution": {
       "account_id": "AccountId",
