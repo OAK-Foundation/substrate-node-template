@@ -51,18 +51,16 @@ pub struct GrantRound<AccountId, Balance, BlockNumber> {
 	end: BlockNumber,
 	matching_fund: Balance,
 	grants: Vec<Grant<AccountId, Balance, BlockNumber>>,
-	funder: AccountId,
 	is_canceled: bool,
 }
 
 impl<AccountId, Balance, BlockNumber: From<u32>> GrantRound<AccountId, Balance, BlockNumber> {
-    fn new(start: BlockNumber, end: BlockNumber, matching_fund: Balance, project_indexes: Vec<ProjectIndex>, funder: AccountId) -> GrantRound<AccountId, Balance, BlockNumber> { 
+    fn new(start: BlockNumber, end: BlockNumber, matching_fund: Balance, project_indexes: Vec<ProjectIndex>) -> GrantRound<AccountId, Balance, BlockNumber> { 
 		let mut grant_round  = GrantRound {
 			start: start,
 			end: end,
 			matching_fund: matching_fund,
 			grants: Vec::new(),
-			funder: funder,
 			is_canceled: false,
 		};
 
@@ -129,6 +127,8 @@ decl_storage! {
 
 		MaxRoundGrants get(fn max_round_grants) config(init_max_round_grants): u32;
 		WithdrawalPeriod get(fn withdrawal_period) config(init_withdrawal_period): T::BlockNumber;
+
+		UnusedFund get(fn unused_fund): BalanceOf<T>;
 	}
 }
 
@@ -145,6 +145,7 @@ decl_event!(
 		GrantWithdrawn(GrantRoundIndex, ProjectIndex, Balance, Balance),
 		GrantAllowedWithdraw(GrantRoundIndex, ProjectIndex),
 		RoundCanceled(GrantRoundIndex),
+		FundSucceed(),
 	}
 );
 
@@ -175,6 +176,7 @@ decl_error! {
 		RoundCanceled,
 		GrantAmountExceed,
 		WithdrawalPeriodExceed,
+		NotEnoughFund,
 	}
 }
 
@@ -242,9 +244,10 @@ decl_module! {
 		/// grant_indexes: the grants were selected for this round
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>) {
-			ensure_root(origin.clone())?;
-			let who = ensure_signed(origin)?;
+			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
+			let unused_fund = <UnusedFund<T>>::get();
+			ensure!(matching_fund <= unused_fund, Error::<T>::NotEnoughFund);
 
 			// The number of items cannot exceed the maximum
 			ensure!(project_indexes.len() <= MaxRoundGrants::get().try_into().unwrap(), Error::<T>::GrantAmountExceed);
@@ -253,7 +256,6 @@ decl_module! {
 			// Both the starting block number and the ending block number must be greater than the current number of blocks
 			ensure!(start > now, Error::<T>::StartBlockNumberInvalid);
 			ensure!(end > now, Error::<T>::EndBlockNumberInvalid);
-
 			// The start time must be greater than the end time of the last valid round
 			let mut last_valid_round: Option<GrantRoundOf::<T>> = None;
 			let index = GrantRoundCount::get();
@@ -274,21 +276,31 @@ decl_module! {
 
 			let next_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
 
-			let round = GrantRoundOf::<T>::new(start, end, matching_fund, project_indexes, who.clone());
+			let round = GrantRoundOf::<T>::new(start, end, matching_fund, project_indexes);
 
 			// Add grant round to list
 			<GrantRounds<T>>::insert(index, round);
 			GrantRoundCount::put(next_index);
 
+			<UnusedFund<T>>::put(unused_fund - matching_fund);
+
+			Self::deposit_event(RawEvent::GrantRoundCreated(index));
+		}
+
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		pub fn fund(origin, fund_balance: BalanceOf<T>) {
+			let who = ensure_signed(origin)?;
+			let unused_fund = <UnusedFund<T>>::get();
 			// Transfer matching fund to module account
 			<T as Config>::Currency::transfer(
 				&who,
 				&Self::account_id(),
-				matching_fund,
+				fund_balance,
 				ExistenceRequirement::AllowDeath
 			)?;
 
-			Self::deposit_event(RawEvent::GrantRoundCreated(index));
+			<UnusedFund<T>>::put(unused_fund + fund_balance);
+			Self::deposit_event(RawEvent::FundSucceed());
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
@@ -296,6 +308,7 @@ decl_module! {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let count = GrantRoundCount::get();
+			let unused_fund = <UnusedFund<T>>::get();
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
 			// Ensure current round is not processed
@@ -303,14 +316,7 @@ decl_module! {
 
 			round.is_canceled = true;
 			<GrantRounds<T>>::insert(round_index, round.clone());
-
-			// Refund
-			<T as Config>::Currency::transfer(
-				&Self::account_id(),
-				&round.funder,
-				round.matching_fund,
-				ExistenceRequirement::AllowDeath
-			)?;
+			<UnusedFund<T>>::put(unused_fund + round.matching_fund);
 
 			Self::deposit_event(RawEvent::RoundCanceled(count-1));
 		}

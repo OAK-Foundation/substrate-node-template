@@ -8,7 +8,6 @@
       "end": "BlockNumber",
       "matching_fund": "Balance",
       "grants": "Vec<Grant>",
-      "funder": "AccountId",
       "is_canceled": "bool"
     },
     "Grant": {
