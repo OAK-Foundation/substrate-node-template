@@ -22,7 +22,7 @@ use sp_std::{convert::{TryInto}};
 use integer_sqrt::IntegerSquareRoot;
 
 /// Configure the pallet by specifying the parameters and types on which it depends.
-pub trait Config: frame_system::Config {
+pub trait Config: frame_system::Config + pallet_identity::Config {
 	// used to generate sovereign account
 	// refer: https://github.com/paritytech/substrate/blob/743accbe3256de2fc615adcaa3ab03ebdbbb4dbd/frame/treasury/src/lib.rs#L92
 	type ModuleId: Get<ModuleId>;
@@ -169,6 +169,7 @@ decl_error! {
 		GrantWithdrawn,
 		GrantNotAllowWithdraw,
 		InvalidAccount,
+		IdentityNeeded,
 		StartBlockNumberTooSmall,
 		RoundNotProcessing,
 		RoundCanceled,
@@ -193,6 +194,19 @@ decl_module! {
 		pub fn create_project(origin, name: Vec<u8>, logo: Vec<u8>, description: Vec<u8>, website: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 
+			let identity = pallet_identity::Module::<T>::identity(who.clone()).ok_or(Error::<T>::IdentityNeeded)?;
+
+			let mut is_found_judgement = false;
+			for judgement in identity.judgements.iter() {
+				if judgement.1 == pallet_identity::Judgement::Reasonable || judgement.1 == pallet_identity::Judgement::KnownGood {
+					is_found_judgement = true;
+					break;
+				}
+			}
+
+			ensure!(is_found_judgement, Error::<T>::IdentityNeeded);
+
+			debug::debug!("identity: {:#?}", identity);
 			debug::debug!("name: {:#?}", name);
 			debug::debug!("logo: {:#?}", logo);
 			debug::debug!("description: {:#?}", description);
@@ -267,7 +281,7 @@ decl_module! {
 			GrantRoundCount::put(next_index);
 
 			// Transfer matching fund to module account
-			T::Currency::transfer(
+			<T as Config>::Currency::transfer(
 				&who,
 				&Self::account_id(),
 				matching_fund,
@@ -278,12 +292,8 @@ decl_module! {
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-<<<<<<< HEAD
-		pub fn cancel_round(origin) {
-			ensure_root(origin)?;
-=======
 		pub fn cancel_round(origin, round_index: GrantRoundIndex) {
->>>>>>> develop
+			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let count = GrantRoundCount::get();
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
@@ -295,7 +305,7 @@ decl_module! {
 			<GrantRounds<T>>::insert(round_index, round.clone());
 
 			// Refund
-			T::Currency::transfer(
+			<T as Config>::Currency::transfer(
 				&Self::account_id(),
 				&round.funder,
 				round.matching_fund,
@@ -365,7 +375,7 @@ decl_module! {
 			}
 
 			// Transfer contribute to grant account
-			T::Currency::transfer(
+			<T as Config>::Currency::transfer(
 				&who,
 				&Self::project_account_id(project_index),
 				value,
@@ -472,7 +482,7 @@ decl_module! {
 
 			// Distribute CLR amount
 			let grant_matching_fund = Self::u128_to_balance(grant_matching_fund);
-			T::Currency::transfer(
+			<T as Config>::Currency::transfer(
 				&Self::account_id(),
 				&project.owner,
 				grant_matching_fund,
@@ -481,7 +491,7 @@ decl_module! {
 
 			// Distribute distribution
 			let contribution_fund = Self::u128_to_balance(contribution_amount);
-			T::Currency::transfer(
+			<T as Config>::Currency::transfer(
 				&Self::project_account_id(project_index),
 				&project.owner,
 				contribution_fund,
@@ -521,7 +531,7 @@ decl_module! {
 			ensure!(!grant.is_allowed_withdraw, Error::<T>::NoActiveGrant);
 
 			for contribution in grant.contributions.iter() {
-				T::Currency::transfer(
+				<T as Config>::Currency::transfer(
 					&Self::project_account_id(project_index),
 					&contribution.account_id,
 					contribution.value,
