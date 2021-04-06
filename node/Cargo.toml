@@ -20,10 +20,14 @@ substrate-build-script-utils = '3.0.0'
 
 [dependencies]
 jsonrpc-core = '15.1.0'
+jsonrpc-core-client = "15.1.0"
+jsonrpc-derive = "15.1.0"
 structopt = '0.3.8'
 
 # local dependencies
 node-template-runtime = { path = '../runtime', version = '3.0.0' }
+open-grant-rpc = { path = "../pallets/open-grant/rpc" }
+open-grant-runtime-api = { path = "../pallets/open-grant/runtime-api" }
 
 # Substrate dependencies
 frame-benchmarking = '3.0.0'

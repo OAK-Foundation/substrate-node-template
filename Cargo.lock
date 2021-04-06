@@ -3480,7 +3480,11 @@ dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
  "node-template-runtime",
+ "open-grant-rpc",
+ "open-grant-runtime-api",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
  "sc-cli",
@@ -3520,6 +3524,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "hex-literal",
+ "open-grant-runtime-api",
  "pallet-aura",
  "pallet-balances",
  "pallet-bounties",
@@ -3669,6 +3674,37 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
+
+[[package]]
+name = "open-grant-rpc"
+version = "0.0.1"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "open-grant-runtime-api",
+ "pallet-open-grant",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-blockchain",
+ "sp-rpc",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "open-grant-runtime-api"
+version = "0.0.1"
+dependencies = [
+ "frame-system",
+ "pallet-open-grant",
+ "parity-scale-codec",
+ "serde_json",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
 
 [[package]]
 name = "openssl-probe"
@@ -3827,6 +3863,7 @@ dependencies = [
  "integer-sqrt",
  "linked-hash-map",
  "parity-scale-codec",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",

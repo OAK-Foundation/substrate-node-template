@@ -99,6 +99,7 @@ pub struct Contribution<AccountId, Balance> {
 
 /// Project struct
 #[derive(Encode, Decode, Default, PartialEq, Eq, Clone, Debug)]
+#[cfg_attr(feature = "std", derive(serde::Serialize))]
 pub struct Project<AccountId> {
 	name: Vec<u8>,
 	logo: Vec<u8>,
@@ -504,6 +505,17 @@ impl<T: Config> Module<T> {
 
 	pub fn balance_to_u128(balance: BalanceOf<T>) -> u128 {
 		TryInto::<u128>::try_into(balance).ok().unwrap()
+	}
+
+	/// Get all projects
+	pub fn get_projects() -> Vec<Project<AccountIdOf<T>>> {
+		let len = ProjectCount::get();
+		let mut projects: Vec<Project<AccountIdOf<T>>> = Vec::new();
+		for i in 0..len {
+			let project = <Projects<T>>::get(i).unwrap();
+			projects.push(project);
+		}
+		projects
 	}
 
 }
