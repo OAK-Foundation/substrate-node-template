@@ -606,6 +606,17 @@ impl_runtime_apis! {
 		}
 	}
 
+	// Here we implement our custom runtime API.
+	impl open_grant_runtime_api::OpenGrantApi<Block, AccountId> for Runtime {
+		fn get_projects() -> Vec<pallet_open_grant::Project<AccountId>> {
+			// This Runtime API calls into a specific pallet. Calling a pallet is a common
+			// design pattern. You can see most other APIs in this file do the same.
+			// It is also possible to write your logic right here in the runtime
+			// amalgamator file
+			OpenGrant::get_projects()
+		}
+	}
+
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			opaque::SessionKeys::generate(seed)
