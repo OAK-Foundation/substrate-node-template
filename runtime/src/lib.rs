@@ -532,8 +532,8 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the template pallet in the runtime.
 		TemplateModule: pallet_template::{Module, Call, Storage, Event<T>},
-		OpenGrant: pallet_open_grant::{Module, Call, Storage, Event<T>},
 		Identity: pallet_identity::{Module, Call, Storage, Event<T>},
+		OpenGrant: pallet_open_grant::{Module, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -639,6 +639,17 @@ impl_runtime_apis! {
 
 		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
+		}
+	}
+
+	// Here we implement our custom runtime API.
+	impl open_grant_runtime_api::OpenGrantApi<Block, AccountId> for Runtime {
+		fn get_projects() -> Vec<pallet_open_grant::Project<AccountId>> {
+			// This Runtime API calls into a specific pallet. Calling a pallet is a common
+			// design pattern. You can see most other APIs in this file do the same.
+			// It is also possible to write your logic right here in the runtime
+			// amalgamator file
+			OpenGrant::get_projects()
 		}
 	}
 

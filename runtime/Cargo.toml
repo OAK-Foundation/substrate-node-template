@@ -28,6 +28,7 @@ static_assertions = "1.1.0"
 # local dependencies
 pallet-template = { path = '../pallets/template', default-features = false, version = '3.0.0' }
 pallet-open-grant = { path = '../pallets/open-grant', default-features = false, version = '0.0.1' }
+open-grant-runtime-api = { path = '../pallets/open-grant/runtime-api', default-features = false, version = '0.0.1' }
 
 # Substrate dependencies
 frame-benchmarking = { default-features = false, optional = true, version = '3.0.0' }
