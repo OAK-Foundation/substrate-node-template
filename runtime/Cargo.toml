@@ -27,6 +27,7 @@ static_assertions = "1.1.0"
 
 # local dependencies
 pallet-template = { path = '../pallets/template', default-features = false, version = '3.0.0' }
+pallet-open-grant = { path = '../pallets/open-grant', default-features = false, version = '0.0.1' }
 
 # Substrate dependencies
 frame-benchmarking = { default-features = false, optional = true, version = '3.0.0' }
@@ -35,6 +36,7 @@ frame-support = { default-features = false, version = '3.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
 frame-system-benchmarking = { default-features = false, optional = true, version = '3.0.0' }
 frame-system-rpc-runtime-api = { default-features = false, version = '3.0.0' }
+pallet-scheduler = { default-features = false, version = '3.0.0' }
 pallet-aura = { default-features = false, version = '3.0.0' }
 pallet-balances = { default-features = false, version = '3.0.0' }
 pallet-grandpa = { default-features = false, version = '3.0.0' }
@@ -89,6 +91,8 @@ std = [
     'pallet-timestamp/std',
     'pallet-transaction-payment/std',
     'pallet-transaction-payment-rpc-runtime-api/std',
+    'pallet-scheduler/std',
+    'pallet-open-grant/std',
     "pallet-collective/std",
 	"pallet-membership/std",
 	"pallet-elections-phragmen/std",
