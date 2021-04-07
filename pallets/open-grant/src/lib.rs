@@ -239,6 +239,22 @@ decl_module! {
 			Self::deposit_event(RawEvent::ProjectCreated(index));
 		}
 
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		pub fn fund(origin, fund_balance: BalanceOf<T>) {
+			let who = ensure_signed(origin)?;
+			let unused_fund = <UnusedFund<T>>::get();
+			// Transfer matching fund to module account
+			<T as Config>::Currency::transfer(
+				&who,
+				&Self::account_id(),
+				fund_balance,
+				ExistenceRequirement::AllowDeath
+			)?;
+
+			<UnusedFund<T>>::put(unused_fund + fund_balance);
+			Self::deposit_event(RawEvent::FundSucceed());
+		}
+
 		/// Schedule a round
 		/// If the last round is not over, no new round can be scheduled
 		/// grant_indexes: the grants were selected for this round
@@ -285,22 +301,6 @@ decl_module! {
 			<UnusedFund<T>>::put(unused_fund - matching_fund);
 
 			Self::deposit_event(RawEvent::GrantRoundCreated(index));
-		}
-
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn fund(origin, fund_balance: BalanceOf<T>) {
-			let who = ensure_signed(origin)?;
-			let unused_fund = <UnusedFund<T>>::get();
-			// Transfer matching fund to module account
-			<T as Config>::Currency::transfer(
-				&who,
-				&Self::account_id(),
-				fund_balance,
-				ExistenceRequirement::AllowDeath
-			)?;
-
-			<UnusedFund<T>>::put(unused_fund + fund_balance);
-			Self::deposit_event(RawEvent::FundSucceed());
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
