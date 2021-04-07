@@ -52,9 +52,10 @@ pub struct GrantRound<AccountId, Balance, BlockNumber> {
 	matching_fund: Balance,
 	grants: Vec<Grant<AccountId, Balance, BlockNumber>>,
 	is_canceled: bool,
+	is_finalized: bool,
 }
 
-impl<AccountId, Balance, BlockNumber: From<u32>> GrantRound<AccountId, Balance, BlockNumber> {
+impl<AccountId, Balance: From<u32>, BlockNumber: From<u32>> GrantRound<AccountId, Balance, BlockNumber> {
     fn new(start: BlockNumber, end: BlockNumber, matching_fund: Balance, project_indexes: Vec<ProjectIndex>) -> GrantRound<AccountId, Balance, BlockNumber> { 
 		let mut grant_round  = GrantRound {
 			start: start,
@@ -62,6 +63,7 @@ impl<AccountId, Balance, BlockNumber: From<u32>> GrantRound<AccountId, Balance, 
 			matching_fund: matching_fund,
 			grants: Vec::new(),
 			is_canceled: false,
+			is_finalized: false,
 		};
 
 		// Fill in the grants structure in advance
@@ -72,7 +74,8 @@ impl<AccountId, Balance, BlockNumber: From<u32>> GrantRound<AccountId, Balance, 
 				is_allowed_withdraw: false,
 				is_canceled: false,
 				is_withdrawn: false,
-				withdrawal_period: (0 as u32).into(), 
+				withdrawal_period: (0 as u32).into(),
+				matching_fund: (0 as u32).into(),
 			});
 		}
 
@@ -89,6 +92,7 @@ pub struct Grant<AccountId, Balance, BlockNumber> {
 	is_canceled: bool,
 	is_withdrawn: bool,
 	withdrawal_period: BlockNumber,
+	matching_fund: Balance,
 }
 
 /// Grant struct
@@ -159,7 +163,8 @@ decl_error! {
 		/// There was an overflow.
 		Overflow,
 		///
-		RoundProcessing,
+		RoundStarted,
+		RoundNotEnded,
 		StartBlockNumberInvalid,
 		EndBlockNumberInvalid,
 		EndTooEarly,
@@ -174,6 +179,7 @@ decl_error! {
 		StartBlockNumberTooSmall,
 		RoundNotProcessing,
 		RoundCanceled,
+		RoundFinalized,
 		GrantAmountExceed,
 		WithdrawalPeriodExceed,
 		NotEnoughFund,
@@ -303,6 +309,8 @@ decl_module! {
 			Self::deposit_event(RawEvent::GrantRoundCreated(index));
 		}
 
+		// 取消一个round
+		// 这个round必须还没开始
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel_round(origin, round_index: GrantRoundIndex) {
 			ensure_root(origin)?;
@@ -311,14 +319,70 @@ decl_module! {
 			let unused_fund = <UnusedFund<T>>::get();
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
-			// Ensure current round is not processed
-			ensure!(round.start > now, Error::<T>::RoundProcessing);
+			// Ensure current round is not started
+			ensure!(round.start > now, Error::<T>::RoundStarted);
+			// round不能被cancel或者finalize过了
+			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 
 			round.is_canceled = true;
 			<GrantRounds<T>>::insert(round_index, round.clone());
 			<UnusedFund<T>>::put(unused_fund + round.matching_fund);
 
 			Self::deposit_event(RawEvent::RoundCanceled(count-1));
+		}
+
+		// 结算一个round
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		pub fn finalize_round(origin, round_index: GrantRoundIndex) {
+			ensure_root(origin)?;
+			let now = <frame_system::Module<T>>::block_number();
+			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			
+			// round不能被cancel或者finalize过了
+			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
+			ensure!(!round.is_finalized, Error::<T>::RoundFinalized);
+			// 这个round必须已经结束了
+			ensure!(now > round.end, Error::<T>::RoundNotEnded);
+
+			let mut grant_clrs: Vec<BalanceOf<T>> = Vec::new();
+			let mut total_clr: BalanceOf<T> = (0 as u32).into();
+
+			// Calculate grant CLR
+			let grants = &mut round.grants;
+			
+			for i in 0..grants.len() {
+				let grant = &grants[i];
+
+				if grant.is_canceled {
+					grant_clrs.push((0 as u32).into());
+					continue;
+				} 
+
+				let mut sqrt_sum: BalanceOf<T> = (0 as u32).into();
+				for contribution in grant.contributions.iter() {
+					let contribution_value: BalanceOf<T> = contribution.value;
+					debug::debug!("contribution_value: {:#?}", contribution_value);
+					sqrt_sum += contribution_value.integer_sqrt();
+				}
+				debug::debug!("sqrt_sum: {:#?}", sqrt_sum);
+				let grant_clr: BalanceOf<T> = sqrt_sum * sqrt_sum;
+				grant_clrs.push(grant_clr);
+				total_clr += grant_clr;
+			}
+
+			// Calculate grant matching fund
+			for i in 0..grants.len() {
+				let grant = &mut grants[i];
+
+				if grant.is_canceled {
+					continue;
+				} 
+
+				grant.matching_fund = grant_clrs[i] / total_clr * round.matching_fund;
+			}
+
+			round.is_finalized = true;
+			<GrantRounds<T>>::insert(round_index, round.clone());
 		}
 
 		/// Contribute a grant
@@ -405,7 +469,8 @@ decl_module! {
 
 			// The round must have ended
 			let now = <frame_system::Module<T>>::block_number();
-			ensure!(round.end < now, Error::<T>::RoundProcessing);
+			// 这个round必须结束了
+			ensure!(round.end < now, Error::<T>::RoundNotEnded);
 
 			// Find grant from list
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
@@ -518,6 +583,11 @@ decl_module! {
 			ensure_root(origin.clone())?;
 
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+
+			// round不能被cancel或者finalize过了
+			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
+			ensure!(!round.is_finalized, Error::<T>::RoundFinalized);
+
 			let grants = &mut round.grants;
 
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
@@ -536,15 +606,6 @@ decl_module! {
 			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 			ensure!(!grant.is_allowed_withdraw, Error::<T>::NoActiveGrant);
 
-			for contribution in grant.contributions.iter() {
-				<T as Config>::Currency::transfer(
-					&Self::project_account_id(project_index),
-					&contribution.account_id,
-					contribution.value,
-					ExistenceRequirement::AllowDeath
-				)?;
-			}
-
 			grant.is_canceled = true;
 
 			<GrantRounds<T>>::insert(round_index, round);
@@ -554,11 +615,13 @@ decl_module! {
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_max_round_grants(origin, max_round_grants: u32) {
+			ensure!(max_round_grants > 0, Error::<T>::InvalidParam);
 			MaxRoundGrants::put(max_round_grants);
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
+			ensure!(withdrawal_period > (0 as u32).into(), Error::<T>::InvalidParam);
 			<WithdrawalPeriod<T>>::put(withdrawal_period);
 		}
 	}
