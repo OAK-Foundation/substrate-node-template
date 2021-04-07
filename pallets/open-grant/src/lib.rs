@@ -309,8 +309,8 @@ decl_module! {
 			Self::deposit_event(RawEvent::GrantRoundCreated(index));
 		}
 
-		// 取消一个round
-		// 这个round必须还没开始
+		// Cancel a round
+		// This round must have not started yet
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel_round(origin, round_index: GrantRoundIndex) {
 			ensure_root(origin)?;
@@ -321,7 +321,7 @@ decl_module! {
 
 			// Ensure current round is not started
 			ensure!(round.start > now, Error::<T>::RoundStarted);
-			// round不能被cancel或者finalize过了
+			// This round cannot be cancelled
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 
 			round.is_canceled = true;
@@ -331,17 +331,17 @@ decl_module! {
 			Self::deposit_event(RawEvent::RoundCanceled(count-1));
 		}
 
-		// 结算一个round
+		/// Finalize a round
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn finalize_round(origin, round_index: GrantRoundIndex) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			
-			// round不能被cancel或者finalize过了
+			// This round cannot be cancelled or finalized
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 			ensure!(!round.is_finalized, Error::<T>::RoundFinalized);
-			// 这个round必须已经结束了
+			// This round must be over
 			ensure!(now > round.end, Error::<T>::RoundNotEnded);
 
 			let mut grant_clrs: Vec<BalanceOf<T>> = Vec::new();
@@ -469,7 +469,7 @@ decl_module! {
 
 			// The round must have ended
 			let now = <frame_system::Module<T>>::block_number();
-			// 这个round必须结束了
+			// This round must be over
 			ensure!(round.end < now, Error::<T>::RoundNotEnded);
 
 			// Find grant from list
@@ -584,7 +584,7 @@ decl_module! {
 
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
-			// round不能被cancel或者finalize过了
+			// This round cannot be cancelled or finalized
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 			ensure!(!round.is_finalized, Error::<T>::RoundFinalized);
 
@@ -592,7 +592,7 @@ decl_module! {
 
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
 
-			// Calculate grant CLR
+			// Find grant with project index
 			for grant in grants.iter_mut() {
 				if grant.project_index == project_index {
 					found_grant = Some(grant);
