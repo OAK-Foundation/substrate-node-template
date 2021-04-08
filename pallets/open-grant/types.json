@@ -8,7 +8,8 @@
       "end": "BlockNumber",
       "matching_fund": "Balance",
       "grants": "Vec<Grant>",
-      "is_canceled": "bool"
+      "is_canceled": "bool",
+      "is_finalized": "bool"
     },
     "Grant": {
       "project_index": "ProjectIndex",

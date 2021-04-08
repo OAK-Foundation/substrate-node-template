@@ -382,7 +382,7 @@ decl_module! {
 					continue;
 				} 
 
-				grant.matching_fund = grant_clrs[i] / total_clr * round.matching_fund;
+				grant.matching_fund = round.matching_fund * grant_clrs[i] / total_clr;
 			}
 
 			round.is_finalized = true;
@@ -519,7 +519,7 @@ decl_module! {
 			}
 
 			let grant = found_grant.ok_or(Error::<T>::NoActiveGrant)?;
-			ensure!(now > grant.withdrawal_period, Error::<T>::WithdrawalPeriodExceed);
+			ensure!(now <= grant.withdrawal_period, Error::<T>::WithdrawalPeriodExceed);
 
 			// This grant must not have distributed funds
 			ensure!(grant.is_approved, Error::<T>::GrantNotApproved);
@@ -623,14 +623,6 @@ impl<T: Config> Module<T> {
 
 	pub fn project_account_id(index: ProjectIndex) -> T::AccountId {
 		T::ModuleId::get().into_sub_account(index)
-	}
-
-	pub fn u128_to_balance(cost: u128) -> BalanceOf<T> {
-		TryInto::<BalanceOf::<T>>::try_into(cost).ok().unwrap()
-	}
-
-	pub fn balance_to_u128(balance: BalanceOf<T>) -> u128 {
-		TryInto::<u128>::try_into(balance).ok().unwrap()
 	}
 
 	/// Get all projects
