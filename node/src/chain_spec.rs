@@ -167,6 +167,7 @@ fn testnet_genesis(
 		pallet_open_grant: Some(OpenGrantConfig {
 			init_max_round_grants: 60,
 			init_withdrawal_period: 1000,
+			init_is_identity_needed: false,
 		}),
 	}
 }

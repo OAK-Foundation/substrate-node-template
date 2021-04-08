@@ -133,6 +133,7 @@ decl_storage! {
 		WithdrawalPeriod get(fn withdrawal_period) config(init_withdrawal_period): T::BlockNumber;
 
 		UnusedFund get(fn unused_fund): BalanceOf<T>;
+		IsIdentityNeeded get(fn is_identity_needed) config(init_is_identity_needed): bool;
 	}
 }
 
@@ -204,19 +205,20 @@ decl_module! {
 		pub fn create_project(origin, name: Vec<u8>, logo: Vec<u8>, description: Vec<u8>, website: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 
-			let identity = pallet_identity::Module::<T>::identity(who.clone()).ok_or(Error::<T>::IdentityNeeded)?;
-
-			let mut is_found_judgement = false;
-			for judgement in identity.judgements.iter() {
-				if judgement.1 == pallet_identity::Judgement::Reasonable || judgement.1 == pallet_identity::Judgement::KnownGood {
-					is_found_judgement = true;
-					break;
+			let is_identity_needed = IsIdentityNeeded::get();
+			if is_identity_needed {
+				let identity = pallet_identity::Module::<T>::identity(who.clone()).ok_or(Error::<T>::IdentityNeeded)?;
+				let mut is_found_judgement = false;
+				for judgement in identity.judgements.iter() {
+					if judgement.1 == pallet_identity::Judgement::Reasonable || judgement.1 == pallet_identity::Judgement::KnownGood {
+						is_found_judgement = true;
+						break;
+					}
 				}
+				debug::debug!("identity: {:#?}", identity);
+				ensure!(is_found_judgement, Error::<T>::IdentityNeeded);
 			}
 
-			ensure!(is_found_judgement, Error::<T>::IdentityNeeded);
-
-			debug::debug!("identity: {:#?}", identity);
 			debug::debug!("name: {:#?}", name);
 			debug::debug!("logo: {:#?}", logo);
 			debug::debug!("description: {:#?}", description);
@@ -601,6 +603,11 @@ decl_module! {
 		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
 			ensure!(withdrawal_period > (0 as u32).into(), Error::<T>::InvalidParam);
 			<WithdrawalPeriod<T>>::put(withdrawal_period);
+		}
+
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		pub fn set_is_identity_needed(origin, is_identity_needed: bool) {
+			IsIdentityNeeded::put(is_identity_needed);
 		}
 	}
 }
