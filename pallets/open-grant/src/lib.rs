@@ -71,7 +71,7 @@ impl<AccountId, Balance: From<u32>, BlockNumber: From<u32>> GrantRound<AccountId
 			grant_round.grants.push(Grant {
 				project_index: project_index,
 				contributions: Vec::new(),
-				is_allowed_withdraw: false,
+				is_approved: false,
 				is_canceled: false,
 				is_withdrawn: false,
 				withdrawal_period: (0 as u32).into(),
@@ -88,7 +88,7 @@ impl<AccountId, Balance: From<u32>, BlockNumber: From<u32>> GrantRound<AccountId
 pub struct Grant<AccountId, Balance, BlockNumber> {
 	project_index: ProjectIndex,
 	contributions: Vec<Contribution<AccountId, Balance>>,
-	is_allowed_withdraw: bool,
+	is_approved: bool,
 	is_canceled: bool,
 	is_withdrawn: bool,
 	withdrawal_period: BlockNumber,
@@ -174,6 +174,8 @@ decl_error! {
 		GrantCanceled,
 		GrantWithdrawn,
 		GrantNotAllowWithdraw,
+		GrantApproved,
+		GrantNotApproved,
 		InvalidAccount,
 		IdentityNeeded,
 		StartBlockNumberTooSmall,
@@ -461,7 +463,7 @@ decl_module! {
 
 		// Distribute fund from grant
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn allow_withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
+		pub fn approve(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			ensure_root(origin.clone())?;
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
@@ -485,8 +487,8 @@ decl_module! {
 			// Can't let users vote in the cancered round
 			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 
-			// set is_allowed_withdraw
-			grant.is_allowed_withdraw = true;
+			// set is_approved
+			grant.is_approved = true;
 			grant.withdrawal_period = now + <WithdrawalPeriod<T>>::get();
 
 			debug::debug!("round: {:#?}", round);
@@ -499,73 +501,49 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			let who = ensure_signed(origin)?;
+			let now = <frame_system::Module<T>>::block_number();
 
 			// Only project owner can withdraw
 			let project = Projects::<T>::get(project_index).ok_or(Error::<T>::NoActiveGrant)?;
 			ensure!(who == project.owner, Error::<T>::InvalidAccount);
 
-			let now = <frame_system::Module<T>>::block_number();
-
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
-			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
-			let grants = &mut round.grants;
-
-			// Calculate CLR(Capital-constrained Liberal Radicalism) for grant
-			let mut grant_clrs = Vec::new();
-			let mut total_clr = 0;
-			let matching_fund = Self::balance_to_u128(round.matching_fund);
-
-			let mut grant_index: Option<usize> = None;
-			let mut contribution_amount = 0;
-
-			// Calculate grant CLR
-			for i in 0..grants.len() {
-				let grant = &grants[i];
-				let mut sqrt_sum = 0;
-				for contribution in grant.contributions.iter() {
-					let contribution_value = Self::balance_to_u128(contribution.value);
-					debug::debug!("contribution_value: {}", contribution_value);
-					sqrt_sum += contribution_value.integer_sqrt();
-					contribution_amount += contribution_value;
-				}
-				debug::debug!("grant_sum: {}", sqrt_sum);
-				let grant_clr = sqrt_sum * sqrt_sum;
-				grant_clrs.push(grant_clr);
-				total_clr += grant_clr;
-
+			let mut found_grant: Option<&mut GrantOf::<T>> = None;
+			for grant in round.grants.iter_mut() {
 				if grant.project_index == project_index {
-					grant_index = Some(i);
+					found_grant = Some(grant);
+					break;
 				}
 			}
 
-			let grant_index = grant_index.ok_or(Error::<T>::NoActiveGrant)?;
-			let mut grant = &mut grants[grant_index];
+			let grant = found_grant.ok_or(Error::<T>::NoActiveGrant)?;
 			ensure!(now > grant.withdrawal_period, Error::<T>::WithdrawalPeriodExceed);
 
 			// This grant must not have distributed funds
-			ensure!(grant.is_allowed_withdraw, Error::<T>::GrantNotAllowWithdraw);
+			ensure!(grant.is_approved, Error::<T>::GrantNotApproved);
 			ensure!(!grant.is_withdrawn, Error::<T>::GrantWithdrawn);
-			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
 
-			// Calculate CLR
-			let grant_clr = grant_clrs[grant_index];
-			let grant_matching_fund = ((grant_clr as f64 / total_clr as f64) * matching_fund as f64) as u128;
+			// Calculate contribution amount
+			let mut contribution_amount: BalanceOf<T>  = (0 as u32).into();
+			for contribution in grant.contributions.iter() {
+				let contribution_value = contribution.value;
+				contribution_amount += contribution_value;
+			}
 
+			let matching_fund = grant.matching_fund;
 			// Distribute CLR amount
-			let grant_matching_fund = Self::u128_to_balance(grant_matching_fund);
 			<T as Config>::Currency::transfer(
 				&Self::account_id(),
 				&project.owner,
-				grant_matching_fund,
+				matching_fund,
 				ExistenceRequirement::AllowDeath
 			)?;
 
 			// Distribute distribution
-			let contribution_fund = Self::u128_to_balance(contribution_amount);
 			<T as Config>::Currency::transfer(
 				&Self::project_account_id(project_index),
 				&project.owner,
-				contribution_fund,
+				contribution_amount,
 				ExistenceRequirement::AllowDeath
 			)?;
 
@@ -575,7 +553,7 @@ decl_module! {
 
 			<GrantRounds<T>>::insert(round_index, round.clone());
 
-			Self::deposit_event(RawEvent::GrantWithdrawn(round_index, project_index, grant_matching_fund, contribution_fund));
+			Self::deposit_event(RawEvent::GrantWithdrawn(round_index, project_index, matching_fund, contribution_amount));
 		}
 
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
@@ -604,7 +582,7 @@ decl_module! {
 
 			// This grant must not have canceled
 			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
-			ensure!(!grant.is_allowed_withdraw, Error::<T>::NoActiveGrant);
+			ensure!(!grant.is_approved, Error::<T>::GrantApproved);
 
 			grant.is_canceled = true;
 
