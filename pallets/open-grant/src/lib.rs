@@ -201,7 +201,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Create project
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(2,2)]
 		pub fn create_project(origin, name: Vec<u8>, logo: Vec<u8>, description: Vec<u8>, website: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 
@@ -268,7 +268,7 @@ decl_module! {
 		/// Schedule a round
 		/// If the last round is not over, no new round can be scheduled
 		/// grant_indexes: the grants were selected for this round
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(4,3)]
 		pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -315,7 +315,7 @@ decl_module! {
 
 		// Cancel a round
 		// This round must have not started yet
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(3,2)]
 		pub fn cancel_round(origin, round_index: GrantRoundIndex) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -390,7 +390,7 @@ decl_module! {
 		}
 
 		/// Contribute a grant
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(2,1)]
 		pub fn contribute(origin, project_index: ProjectIndex, value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -464,7 +464,7 @@ decl_module! {
 		}
 
 		// Distribute fund from grant
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(2,1)]
 		pub fn approve(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			ensure_root(origin.clone())?;
 			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
@@ -500,7 +500,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::GrantAllowedWithdraw(round_index, project_index));
 		}
 
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(3,1)]
 		pub fn withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
 			let who = ensure_signed(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -593,19 +593,19 @@ decl_module! {
 			Self::deposit_event(RawEvent::GrantCanceled(round_index, project_index));
 		}
 
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn set_max_round_grants(origin, max_round_grants: u32) {
 			ensure!(max_round_grants > 0, Error::<T>::InvalidParam);
 			MaxRoundGrants::put(max_round_grants);
 		}
 
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
 			ensure!(withdrawal_period > (0 as u32).into(), Error::<T>::InvalidParam);
 			<WithdrawalPeriod<T>>::put(withdrawal_period);
 		}
 
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn set_is_identity_needed(origin, is_identity_needed: bool) {
 			IsIdentityNeeded::put(is_identity_needed);
 		}
