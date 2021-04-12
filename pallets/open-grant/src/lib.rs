@@ -538,7 +538,8 @@ decl_module! {
 			let matching_fund = grant.matching_fund;
 
 			// Distribute CLR amount
-			<T as Config>::Currency::resolve_creating(&project.owner, <T as Config>::Currency::withdraw(
+			// Return funds to caller without charging a transfer fee
+			let _ = <T as Config>::Currency::resolve_into_existing(&project.owner, <T as Config>::Currency::withdraw(
 				&Self::account_id(),
 				matching_fund,
 				WithdrawReasons::from(WithdrawReasons::TRANSFER),
@@ -546,7 +547,7 @@ decl_module! {
 			)?);
 
 			// Distribute contribution amount
-			<T as Config>::Currency::resolve_creating(&project.owner, <T as Config>::Currency::withdraw(
+			let _ = <T as Config>::Currency::resolve_into_existing(&project.owner, <T as Config>::Currency::withdraw(
 				&Self::project_account_id(project_index),
 				contribution_amount,
 				WithdrawReasons::from(WithdrawReasons::TRANSFER),
