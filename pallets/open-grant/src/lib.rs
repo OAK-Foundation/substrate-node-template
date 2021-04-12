@@ -35,18 +35,18 @@ pub trait Config: frame_system::Config + pallet_identity::Config {
 }
 
 pub type ProjectIndex = u32;
-pub type GrantRoundIndex = u32;
+pub type RoundIndex = u32;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
 type ProjectOf<T> = Project<AccountIdOf<T>>;
 type ContributionOf<T> = Contribution<AccountIdOf<T>, BalanceOf<T>>;
-type GrantRoundOf<T> = GrantRound<AccountIdOf<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
+type RoundOf<T> = Round<AccountIdOf<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
 type GrantOf<T> = Grant<AccountIdOf<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
 
-/// Grant Round struct
+/// Round struct
 #[derive(Encode, Decode, Default, PartialEq, Eq, Clone, Debug)]
-pub struct GrantRound<AccountId, Balance, BlockNumber> {
+pub struct Round<AccountId, Balance, BlockNumber> {
 	start: BlockNumber,
 	end: BlockNumber,
 	matching_fund: Balance,
@@ -55,9 +55,9 @@ pub struct GrantRound<AccountId, Balance, BlockNumber> {
 	is_finalized: bool,
 }
 
-impl<AccountId, Balance: From<u32>, BlockNumber: From<u32>> GrantRound<AccountId, Balance, BlockNumber> {
-    fn new(start: BlockNumber, end: BlockNumber, matching_fund: Balance, project_indexes: Vec<ProjectIndex>) -> GrantRound<AccountId, Balance, BlockNumber> { 
-		let mut grant_round  = GrantRound {
+impl<AccountId, Balance: From<u32>, BlockNumber: From<u32>> Round<AccountId, Balance, BlockNumber> {
+    fn new(start: BlockNumber, end: BlockNumber, matching_fund: Balance, project_indexes: Vec<ProjectIndex>) -> Round<AccountId, Balance, BlockNumber> { 
+		let mut grant_round  = Round {
 			start: start,
 			end: end,
 			matching_fund: matching_fund,
@@ -126,8 +126,8 @@ decl_storage! {
 		Projects get(fn grants): map hasher(blake2_128_concat) ProjectIndex => Option<ProjectOf<T>>;
 		ProjectCount get(fn project_count): ProjectIndex;
 
-		GrantRounds get(fn grant_rounds): map hasher(blake2_128_concat) GrantRoundIndex => Option<GrantRoundOf<T>>;
-		GrantRoundCount get(fn grant_round_count): GrantRoundIndex;
+		Rounds get(fn rounds): map hasher(blake2_128_concat) RoundIndex => Option<RoundOf<T>>;
+		RoundCount get(fn round_count): RoundIndex;
 
 		MaxRoundGrants get(fn max_round_grants) config(init_max_round_grants): u32;
 		WithdrawalPeriod get(fn withdrawal_period) config(init_withdrawal_period): T::BlockNumber;
@@ -144,12 +144,12 @@ decl_event!(
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
 		ProjectCreated(ProjectIndex),
-		GrantRoundCreated(GrantRoundIndex),
+		RoundCreated(RoundIndex),
 		ContributeSucceed(AccountId, ProjectIndex, Balance, BlockNumber),
-		GrantCanceled(GrantRoundIndex, ProjectIndex),
-		GrantWithdrawn(GrantRoundIndex, ProjectIndex, Balance, Balance),
-		GrantAllowedWithdraw(GrantRoundIndex, ProjectIndex),
-		RoundCanceled(GrantRoundIndex),
+		GrantCanceled(RoundIndex, ProjectIndex),
+		GrantWithdrawn(RoundIndex, ProjectIndex, Balance, Balance),
+		GrantApproved(RoundIndex, ProjectIndex),
+		RoundCanceled(RoundIndex),
 		FundSucceed(),
 	}
 );
@@ -174,7 +174,6 @@ decl_error! {
 		InvalidParam,
 		GrantCanceled,
 		GrantWithdrawn,
-		GrantNotAllowWithdraw,
 		GrantApproved,
 		GrantNotApproved,
 		InvalidAccount,
@@ -205,6 +204,7 @@ decl_module! {
 		pub fn create_project(origin, name: Vec<u8>, logo: Vec<u8>, description: Vec<u8>, website: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 
+			// Check if identity is required
 			let is_identity_needed = IsIdentityNeeded::get();
 			if is_identity_needed {
 				let identity = pallet_identity::Module::<T>::identity(who.clone()).ok_or(Error::<T>::IdentityNeeded)?;
@@ -215,16 +215,10 @@ decl_module! {
 						break;
 					}
 				}
-				debug::debug!("identity: {:#?}", identity);
 				ensure!(is_found_judgement, Error::<T>::IdentityNeeded);
 			}
 
-			debug::debug!("name: {:#?}", name);
-			debug::debug!("logo: {:#?}", logo);
-			debug::debug!("description: {:#?}", description);
-			debug::debug!("website: {:#?}", website);
-
-			// TODO: Validation
+			// Validation
 			ensure!(name.len() > 0, Error::<T>::InvalidParam);
 			ensure!(logo.len() > 0, Error::<T>::InvalidParam);
 			ensure!(description.len() > 0, Error::<T>::InvalidParam);
@@ -249,6 +243,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::ProjectCreated(index));
 		}
 
+		/// Funding to matching fund pool
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn fund(origin, fund_balance: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
@@ -266,7 +261,6 @@ decl_module! {
 		}
 
 		/// Schedule a round
-		/// If the last round is not over, no new round can be scheduled
 		/// grant_indexes: the grants were selected for this round
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>) {
@@ -282,17 +276,19 @@ decl_module! {
 			// Both the starting block number and the ending block number must be greater than the current number of blocks
 			ensure!(start > now, Error::<T>::StartBlockNumberInvalid);
 			ensure!(end > now, Error::<T>::EndBlockNumberInvalid);
-			// The start time must be greater than the end time of the last valid round
-			let mut last_valid_round: Option<GrantRoundOf::<T>> = None;
-			let index = GrantRoundCount::get();
+
+			// Find the last valid round
+			let mut last_valid_round: Option<RoundOf::<T>> = None;
+			let index = RoundCount::get();
 			for _i in (0..index).rev() {
-				let round = <GrantRounds<T>>::get(index-1).unwrap();
+				let round = <Rounds<T>>::get(index-1).unwrap();
 				if !round.is_canceled {
 					last_valid_round = Some(round);
 					break;
 				}
 			}
-			
+
+			// The start time must be greater than the end time of the last valid round
 			match last_valid_round {
 				Some(round) => {
 					ensure!(start > round.end, Error::<T>::StartBlockNumberTooSmall);
@@ -302,26 +298,26 @@ decl_module! {
 
 			let next_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
 
-			let round = GrantRoundOf::<T>::new(start, end, matching_fund, project_indexes);
+			let round = RoundOf::<T>::new(start, end, matching_fund, project_indexes);
 
 			// Add grant round to list
-			<GrantRounds<T>>::insert(index, round);
-			GrantRoundCount::put(next_index);
+			<Rounds<T>>::insert(index, round);
+			RoundCount::put(next_index);
 
 			<UnusedFund<T>>::put(unused_fund - matching_fund);
 
-			Self::deposit_event(RawEvent::GrantRoundCreated(index));
+			Self::deposit_event(RawEvent::RoundCreated(index));
 		}
 
-		// Cancel a round
-		// This round must have not started yet
+		/// Cancel a round
+		/// This round must have not started yet
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn cancel_round(origin, round_index: GrantRoundIndex) {
+		pub fn cancel_round(origin, round_index: RoundIndex) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
-			let count = GrantRoundCount::get();
+			let count = RoundCount::get();
 			let unused_fund = <UnusedFund<T>>::get();
-			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
 			// Ensure current round is not started
 			ensure!(round.start > now, Error::<T>::RoundStarted);
@@ -329,7 +325,7 @@ decl_module! {
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 
 			round.is_canceled = true;
-			<GrantRounds<T>>::insert(round_index, round.clone());
+			<Rounds<T>>::insert(round_index, round.clone());
 			<UnusedFund<T>>::put(unused_fund + round.matching_fund);
 
 			Self::deposit_event(RawEvent::RoundCanceled(count-1));
@@ -337,10 +333,10 @@ decl_module! {
 
 		/// Finalize a round
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn finalize_round(origin, round_index: GrantRoundIndex) {
+		pub fn finalize_round(origin, round_index: RoundIndex) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
-			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			
 			// This round cannot be cancelled or finalized
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
@@ -354,6 +350,7 @@ decl_module! {
 			// Calculate grant CLR
 			let grants = &mut round.grants;
 			
+			// Calculates project CLRs and total ClR
 			for i in 0..grants.len() {
 				let grant = &grants[i];
 
@@ -365,10 +362,9 @@ decl_module! {
 				let mut sqrt_sum: BalanceOf<T> = (0 as u32).into();
 				for contribution in grant.contributions.iter() {
 					let contribution_value: BalanceOf<T> = contribution.value;
-					debug::debug!("contribution_value: {:#?}", contribution_value);
 					sqrt_sum += contribution_value.integer_sqrt();
 				}
-				debug::debug!("sqrt_sum: {:#?}", sqrt_sum);
+
 				let grant_clr: BalanceOf<T> = sqrt_sum * sqrt_sum;
 				grant_clrs.push(grant_clr);
 				total_clr += grant_clr;
@@ -386,7 +382,7 @@ decl_module! {
 			}
 
 			round.is_finalized = true;
-			<GrantRounds<T>>::insert(round_index, round.clone());
+			<Rounds<T>>::insert(round_index, round.clone());
 		}
 
 		/// Contribute a grant
@@ -396,13 +392,13 @@ decl_module! {
 			let now = <frame_system::Module<T>>::block_number();
 			
 			// round list must be not none
-			let round_index = GrantRoundCount::get();
+			let round_index = RoundCount::get();
 			ensure!(round_index > 0, Error::<T>::NoActiveRound);
 
 			// Find processing round
-			let mut processing_round: Option<GrantRoundOf::<T>> = None;
+			let mut processing_round: Option<RoundOf::<T>> = None;
 			for i in (0..round_index).rev() {
-				let round = <GrantRounds<T>>::get(i).unwrap();
+				let round = <Rounds<T>>::get(i).unwrap();
 				if !round.is_canceled && round.start < now && round.end > now {
 					processing_round = Some(round);
 				}
@@ -426,8 +422,6 @@ decl_module! {
 			// If you have contributed before, then add to that contribution. Otherwise join the list.
 			let mut found_contribution: Option<&mut ContributionOf::<T>> = None;
 			for contribution in grant.contributions.iter_mut() {
-				debug::debug!("contribution.account_id: {:#?}", contribution.account_id);
-				debug::debug!("who: {:#?}", who);
 				if contribution.account_id == who {
 					found_contribution = Some(contribution);
 					break;
@@ -437,14 +431,12 @@ decl_module! {
 			match found_contribution {
 				Some(contribution) => {
 					contribution.value += value;
-					debug::debug!("contribution.value: {:#?}", contribution.value);
 				},
 				None => {
 					grant.contributions.push(ContributionOf::<T> {
 						account_id: who.clone(),
 						value: value,
 					});
-					debug::debug!("contributions: {:#?}", grant.contributions);
 				}
 			}
 
@@ -455,19 +447,18 @@ decl_module! {
 				value,
 				ExistenceRequirement::AllowDeath
 			)?;
-
-			debug::debug!("grant: {:#?}", grant);
-
-			<GrantRounds<T>>::insert(round_index-1, round);
+			
+			<Rounds<T>>::insert(round_index-1, round);
 
 			Self::deposit_event(RawEvent::ContributeSucceed(who, project_index, value, now));
 		}
 
-		// Distribute fund from grant
+		/// Approve project
+		/// If the project is approve, the project owner can withdraw funds
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn approve(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
+		pub fn approve(origin, round_index: RoundIndex, project_index: ProjectIndex) {
 			ensure_root(origin.clone())?;
-			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 			let grants = &mut round.grants;
 
@@ -495,13 +486,14 @@ decl_module! {
 
 			debug::debug!("round: {:#?}", round);
 
-			<GrantRounds<T>>::insert(round_index, round.clone());
+			<Rounds<T>>::insert(round_index, round.clone());
 
-			Self::deposit_event(RawEvent::GrantAllowedWithdraw(round_index, project_index));
+			Self::deposit_event(RawEvent::GrantApproved(round_index, project_index));
 		}
 
+		/// Withdraw
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn withdraw(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
+		pub fn withdraw(origin, round_index: RoundIndex, project_index: ProjectIndex) {
 			let who = ensure_signed(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
 
@@ -509,7 +501,7 @@ decl_module! {
 			let project = Projects::<T>::get(project_index).ok_or(Error::<T>::NoActiveGrant)?;
 			ensure!(who == project.owner, Error::<T>::InvalidAccount);
 
-			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			let mut found_grant: Option<&mut GrantOf::<T>> = None;
 			for grant in round.grants.iter_mut() {
 				if grant.project_index == project_index {
@@ -553,16 +545,18 @@ decl_module! {
 			grant.is_withdrawn = true;
 			grant.withdrawal_period = now + <WithdrawalPeriod<T>>::get();
 
-			<GrantRounds<T>>::insert(round_index, round.clone());
+			<Rounds<T>>::insert(round_index, round.clone());
 
 			Self::deposit_event(RawEvent::GrantWithdrawn(round_index, project_index, matching_fund, contribution_amount));
 		}
 
+		// Cancel a problematic project
+		// If the project is cancelled, users cannot donate to it, and project owner cannot withdraw funds.
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
-		pub fn cancel(origin, round_index: GrantRoundIndex, project_index: ProjectIndex) {
+		pub fn cancel(origin, round_index: RoundIndex, project_index: ProjectIndex) {
 			ensure_root(origin.clone())?;
 
-			let mut round = <GrantRounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
 			// This round cannot be cancelled or finalized
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
@@ -588,23 +582,26 @@ decl_module! {
 
 			grant.is_canceled = true;
 
-			<GrantRounds<T>>::insert(round_index, round);
+			<Rounds<T>>::insert(round_index, round);
 
 			Self::deposit_event(RawEvent::GrantCanceled(round_index, project_index));
 		}
 
+		// Set max round grants
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_max_round_grants(origin, max_round_grants: u32) {
 			ensure!(max_round_grants > 0, Error::<T>::InvalidParam);
 			MaxRoundGrants::put(max_round_grants);
 		}
 
+		// Set withdrawal period
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
 			ensure!(withdrawal_period > (0 as u32).into(), Error::<T>::InvalidParam);
 			<WithdrawalPeriod<T>>::put(withdrawal_period);
 		}
 
+		// set is_identity_needed
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_is_identity_needed(origin, is_identity_needed: bool) {
 			IsIdentityNeeded::put(is_identity_needed);
