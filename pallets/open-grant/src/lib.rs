@@ -151,6 +151,7 @@ decl_event!(
 		GrantApproved(RoundIndex, ProjectIndex),
 		RoundCanceled(RoundIndex),
 		FundSucceed(),
+		RoundFinalized(RoundIndex),
 	}
 );
 
@@ -383,6 +384,8 @@ decl_module! {
 
 			round.is_finalized = true;
 			<Rounds<T>>::insert(round_index, round.clone());
+
+			Self::deposit_event(RawEvent::RoundFinalized(round_index));
 		}
 
 		/// Contribute a grant
