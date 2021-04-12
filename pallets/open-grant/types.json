@@ -2,7 +2,7 @@
     "ProjectIndex": "u32",
     "ProjectOf": "Project",
     "RoundIndex": "u32",
-    "RoundOf": "GrantRound",
+    "RoundOf": "Round",
     "Round": {
       "start": "BlockNumber",
       "end": "BlockNumber",
