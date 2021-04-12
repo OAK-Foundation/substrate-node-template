@@ -8,16 +8,17 @@
       "end": "BlockNumber",
       "matching_fund": "Balance",
       "grants": "Vec<Grant>",
-      "funder": "AccountId",
-      "is_canceled": "bool"
+      "is_canceled": "bool",
+      "is_finalized": "bool"
     },
     "Grant": {
       "project_index": "ProjectIndex",
       "contributions": "Vec<Contribution>",
-      "is_allowed_withdraw": "bool",
+      "is_approved": "bool",
       "is_canceled": "bool",
       "is_withdrawn": "bool",
-      "withdrawal_period": "BlockNumber"
+      "withdrawal_period": "BlockNumber",
+      "matching_fund": "Balance"
     },
     "Contribution": {
       "account_id": "AccountId",
