@@ -1,9 +1,9 @@
 {
     "ProjectIndex": "u32",
     "ProjectOf": "Project",
-    "GrantRoundIndex": "u32",
-    "GrantRoundOf": "GrantRound",
-    "GrantRound": {
+    "RoundIndex": "u32",
+    "RoundOf": "Round",
+    "Round": {
       "start": "BlockNumber",
       "end": "BlockNumber",
       "matching_fund": "Balance",

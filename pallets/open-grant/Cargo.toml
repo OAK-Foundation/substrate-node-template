@@ -1,6 +1,6 @@
 [package]
 authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
-description = 'FRAME pallet open-grant for defining custom runtime logic.'
+description = 'FRAME pallet to allocate grant funds'
 edition = '2018'
 homepage = 'https://substrate.dev'
 license = 'Unlicense'
