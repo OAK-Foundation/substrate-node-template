@@ -201,7 +201,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Create project
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(2,2)]
 		pub fn create_project(origin, name: Vec<u8>, logo: Vec<u8>, description: Vec<u8>, website: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 
@@ -266,7 +266,7 @@ decl_module! {
 
 		/// Schedule a round
 		/// grant_indexes: the grants were selected for this round
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(4,3)]
 		pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -315,7 +315,7 @@ decl_module! {
 
 		/// Cancel a round
 		/// This round must have not started yet
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(3,2)]
 		pub fn cancel_round(origin, round_index: RoundIndex) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -392,7 +392,7 @@ decl_module! {
 		}
 
 		/// Contribute a grant
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(2,1)]
 		pub fn contribute(origin, project_index: ProjectIndex, value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -461,7 +461,7 @@ decl_module! {
 
 		/// Approve project
 		/// If the project is approve, the project owner can withdraw funds
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(2,1)]
 		pub fn approve(origin, round_index: RoundIndex, project_index: ProjectIndex) {
 			ensure_root(origin)?;
 			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
@@ -498,7 +498,7 @@ decl_module! {
 		}
 
 		/// Withdraw
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(3,1)]
 		pub fn withdraw(origin, round_index: RoundIndex, project_index: ProjectIndex) {
 			let who = ensure_signed(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
@@ -559,8 +559,8 @@ decl_module! {
 			Self::deposit_event(RawEvent::GrantWithdrawn(round_index, project_index, matching_fund, contribution_amount));
 		}
 
-		// Cancel a problematic project
-		// If the project is cancelled, users cannot donate to it, and project owner cannot withdraw funds.
+		/// Cancel a problematic project
+		/// If the project is cancelled, users cannot donate to it, and project owner cannot withdraw funds.
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel(origin, round_index: RoundIndex, project_index: ProjectIndex) {
 			ensure_root(origin)?;
@@ -596,24 +596,24 @@ decl_module! {
 			Self::deposit_event(RawEvent::GrantCanceled(round_index, project_index));
 		}
 
-		// Set max round grants
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		/// Set max round grants
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn set_max_round_grants(origin, max_round_grants: u32) {
 			ensure_root(origin)?;
 			ensure!(max_round_grants > 0, Error::<T>::InvalidParam);
 			MaxRoundGrants::put(max_round_grants);
 		}
 
-		// Set withdrawal period
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		/// Set withdrawal period
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
 			ensure_root(origin)?;
 			ensure!(withdrawal_period > (0 as u32).into(), Error::<T>::InvalidParam);
 			<WithdrawalPeriod<T>>::put(withdrawal_period);
 		}
 
-		// set is_identity_needed
-		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
+		/// set is_identity_needed
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn set_is_identity_needed(origin, is_identity_needed: bool) {
 			ensure_root(origin)?;
 			IsIdentityNeeded::put(is_identity_needed);
