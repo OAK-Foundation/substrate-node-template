@@ -460,7 +460,7 @@ decl_module! {
 		/// If the project is approve, the project owner can withdraw funds
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn approve(origin, round_index: RoundIndex, project_index: ProjectIndex) {
-			ensure_root(origin.clone())?;
+			ensure_root(origin)?;
 			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 			let grants = &mut round.grants;
@@ -557,7 +557,7 @@ decl_module! {
 		// If the project is cancelled, users cannot donate to it, and project owner cannot withdraw funds.
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cancel(origin, round_index: RoundIndex, project_index: ProjectIndex) {
-			ensure_root(origin.clone())?;
+			ensure_root(origin)?;
 
 			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
@@ -593,6 +593,7 @@ decl_module! {
 		// Set max round grants
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_max_round_grants(origin, max_round_grants: u32) {
+			ensure_root(origin)?;
 			ensure!(max_round_grants > 0, Error::<T>::InvalidParam);
 			MaxRoundGrants::put(max_round_grants);
 		}
@@ -600,6 +601,7 @@ decl_module! {
 		// Set withdrawal period
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
+			ensure_root(origin)?;
 			ensure!(withdrawal_period > (0 as u32).into(), Error::<T>::InvalidParam);
 			<WithdrawalPeriod<T>>::put(withdrawal_period);
 		}
@@ -607,6 +609,7 @@ decl_module! {
 		// set is_identity_needed
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn set_is_identity_needed(origin, is_identity_needed: bool) {
+			ensure_root(origin)?;
 			IsIdentityNeeded::put(is_identity_needed);
 		}
 	}
