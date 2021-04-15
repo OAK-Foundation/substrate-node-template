@@ -33,7 +33,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use sp_runtime::{Percent, Permill, Perbill};
 pub use frame_support::{
-	construct_runtime, parameter_types, StorageValue,
+	construct_runtime, parameter_types, ord_parameter_types, StorageValue,
 	traits::{KeyOwnerProofSystem, Randomness, LockIdentifier},
 	weights::{
 		Weight, IdentityFee,
@@ -44,6 +44,8 @@ use pallet_transaction_payment::CurrencyAdapter;
 
 /// Import the template pallet.
 pub use pallet_template;
+/// Import the open-grant pallet.
+pub use pallet_open_grant;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -104,7 +106,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node-template"),
 	impl_name: create_runtime_str!("node-template"),
 	authoring_version: 1,
-	spec_version: 100,
+	spec_version: 103,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -432,6 +434,24 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
+// Define the types required by the Scheduler pallet.
+parameter_types! {
+    pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
+    pub const MaxScheduledPerBlock: u32 = 50;
+}
+
+// Configure the runtime's implementation of the Scheduler pallet.
+impl pallet_scheduler::Config for Runtime {
+    type Event = Event;
+    type Origin = Origin;
+    type PalletsOrigin = OriginCaller;
+    type Call = Call;
+    type MaximumWeight = MaximumSchedulerWeight;
+    type ScheduleOrigin = frame_system::EnsureRoot<AccountId>;
+    type MaxScheduledPerBlock = MaxScheduledPerBlock;
+    type WeightInfo = ();
+}
+
 impl pallet_sudo::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -440,6 +460,51 @@ impl pallet_sudo::Config for Runtime {
 /// Configure the template pallet in pallets/template.
 impl pallet_template::Config for Runtime {
 	type Event = Event;
+}
+
+parameter_types! {
+	pub const OpenGrantModuleId: ModuleId = ModuleId(*b"py/opgrd");
+}
+
+impl pallet_open_grant::Config for Runtime {
+	type ModuleId = OpenGrantModuleId;
+	type Event = Event;
+	type Currency = Balances;
+}
+
+parameter_types! {
+	pub const BasicDeposit: u64 = 10;
+	pub const FieldDeposit: u64 = 10;
+	pub const SubAccountDeposit: u64 = 10;
+	pub const MaxSubAccounts: u32 = 2;
+	pub const MaxAdditionalFields: u32 = 2;
+	pub const MaxRegistrars: u32 = 20;
+}
+
+ord_parameter_types! {
+	pub const One: u64 = 1;
+	pub const Two: u64 = 2;
+}
+
+type EnsureRootOrHalfCouncil = EnsureOneOf<
+	AccountId,
+	EnsureRoot<AccountId>,
+	pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>
+>;
+
+impl pallet_identity::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type Slashed = ();
+	type BasicDeposit = BasicDeposit;
+	type FieldDeposit = FieldDeposit;
+	type SubAccountDeposit = SubAccountDeposit;
+	type MaxSubAccounts = MaxSubAccounts;
+	type MaxAdditionalFields = MaxAdditionalFields;
+	type MaxRegistrars = MaxRegistrars;
+	type RegistrarOrigin = EnsureRootOrHalfCouncil;
+	type ForceOrigin = EnsureRootOrHalfCouncil;
+	type WeightInfo = ();
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -456,6 +521,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
+		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Council: pallet_collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
         TechnicalCommittee: pallet_collective::<Instance2>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
         TechnicalMembership: pallet_membership::<Instance1>::{Module, Call, Storage, Event<T>, Config<T>},
@@ -466,6 +532,8 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the template pallet in the runtime.
 		TemplateModule: pallet_template::{Module, Call, Storage, Event<T>},
+		Identity: pallet_identity::{Module, Call, Storage, Event<T>},
+		OpenGrant: pallet_open_grant::{Module, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -571,6 +639,17 @@ impl_runtime_apis! {
 
 		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
+		}
+	}
+
+	// Here we implement our custom runtime API.
+	impl open_grant_runtime_api::OpenGrantApi<Block, AccountId> for Runtime {
+		fn get_projects() -> Vec<pallet_open_grant::Project<AccountId>> {
+			// This Runtime API calls into a specific pallet. Calling a pallet is a common
+			// design pattern. You can see most other APIs in this file do the same.
+			// It is also possible to write your logic right here in the runtime
+			// amalgamator file
+			OpenGrant::get_projects()
 		}
 	}
 
