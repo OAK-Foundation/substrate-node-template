@@ -7,7 +7,7 @@
 use frame_support::{
 	codec::{Decode, Encode},
 	decl_module, decl_storage, decl_event, decl_error, traits::Get,
-	traits::{ReservableCurrency, ExistenceRequirement, Currency, },
+	traits::{ReservableCurrency, ExistenceRequirement, Currency, WithdrawReasons},
 	debug, ensure,
 };
 
@@ -249,13 +249,16 @@ decl_module! {
 		pub fn fund(origin, fund_balance: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 			let unused_fund = <UnusedFund<T>>::get();
+
 			// Transfer matching fund to module account
-			<T as Config>::Currency::transfer(
+			// No fees are paid here if we need to create this account; that's why we don't just
+			// use the stock `transfer`.
+			<T as Config>::Currency::resolve_creating(&Self::account_id(), <T as Config>::Currency::withdraw(
 				&who,
-				&Self::account_id(),
 				fund_balance,
-				ExistenceRequirement::AllowDeath
-			)?;
+				WithdrawReasons::from(WithdrawReasons::TRANSFER),
+				ExistenceRequirement::AllowDeath,
+			)?);
 
 			<UnusedFund<T>>::put(unused_fund + fund_balance);
 			Self::deposit_event(RawEvent::FundSucceed());
@@ -528,21 +531,24 @@ decl_module! {
 			}
 
 			let matching_fund = grant.matching_fund;
-			// Distribute CLR amount
-			<T as Config>::Currency::transfer(
-				&Self::account_id(),
-				&project.owner,
-				matching_fund,
-				ExistenceRequirement::AllowDeath
-			)?;
 
-			// Distribute distribution
-			<T as Config>::Currency::transfer(
+			// Distribute CLR amount
+			// Return funds to caller without charging a transfer fee
+			let _ = <T as Config>::Currency::resolve_into_existing(&project.owner, <T as Config>::Currency::withdraw(
+				&Self::account_id(),
+				matching_fund,
+				WithdrawReasons::from(WithdrawReasons::TRANSFER),
+				ExistenceRequirement::AllowDeath,
+			)?);
+
+			// Distribute contribution amount
+			let _ = <T as Config>::Currency::resolve_into_existing(&project.owner, <T as Config>::Currency::withdraw(
 				&Self::project_account_id(project_index),
-				&project.owner,
 				contribution_amount,
-				ExistenceRequirement::AllowDeath
-			)?;
+				WithdrawReasons::from(WithdrawReasons::TRANSFER),
+				ExistenceRequirement::AllowDeath,
+			)?);
+
 
 			// Set is_withdrawn
 			grant.is_withdrawn = true;
