@@ -248,6 +248,7 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn fund(origin, fund_balance: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
+			ensure!(fund_balance > (0 as u32).into(), Error::<T>::InvalidParam);
 			let unused_fund = <UnusedFund<T>>::get();
 
 			// Transfer matching fund to module account
