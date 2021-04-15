@@ -5,10 +5,9 @@
 /// https://substrate.dev/docs/en/knowledgebase/runtime/frame
 
 use frame_support::{
+	decl_module, decl_storage, decl_event, decl_error, ensure, traits::Get,
 	codec::{Decode, Encode},
-	decl_module, decl_storage, decl_event, decl_error, traits::Get,
-	traits::{ReservableCurrency, ExistenceRequirement, Currency, WithdrawReasons},
-	debug, ensure,
+	traits::{ReservableCurrency, ExistenceRequirement, Currency, WithdrawReasons}
 };
 
 use sp_runtime::{
@@ -16,7 +15,7 @@ use sp_runtime::{
 	ModuleId,
 };
 
-use frame_system::{ensure_signed, ensure_root, };
+use frame_system::{ensure_signed, ensure_root};
 use sp_std::prelude::*;
 use sp_std::{convert::{TryInto}};
 use integer_sqrt::IntegerSquareRoot;
@@ -183,9 +182,11 @@ decl_error! {
 		RoundNotProcessing,
 		RoundCanceled,
 		RoundFinalized,
+		RoundNotFinalized,
 		GrantAmountExceed,
 		WithdrawalPeriodExceed,
 		NotEnoughFund,
+		InvalidProjectIndexes,
 	}
 }
 
@@ -274,6 +275,7 @@ decl_module! {
 			let unused_fund = <UnusedFund<T>>::get();
 			ensure!(matching_fund <= unused_fund, Error::<T>::NotEnoughFund);
 
+			ensure!(project_indexes.len() > 0, Error::<T>::InvalidProjectIndexes);
 			// The number of items cannot exceed the maximum
 			ensure!(project_indexes.len() <= MaxRoundGrants::get().try_into().unwrap(), Error::<T>::GrantAmountExceed);
 			// The end block must be greater than the start block
@@ -281,6 +283,12 @@ decl_module! {
 			// Both the starting block number and the ending block number must be greater than the current number of blocks
 			ensure!(start > now, Error::<T>::StartBlockNumberInvalid);
 			ensure!(end > now, Error::<T>::EndBlockNumberInvalid);
+
+			// project_index should be smaller than project count
+			let project_count = ProjectCount::get();
+			for project_index in project_indexes.iter() {
+				ensure!(*project_index < project_count, Error::<T>::InvalidProjectIndexes);
+			}
 
 			// Find the last valid round
 			let mut last_valid_round: Option<RoundOf::<T>> = None;
@@ -376,14 +384,16 @@ decl_module! {
 			}
 
 			// Calculate grant matching fund
-			for i in 0..grants.len() {
-				let grant = &mut grants[i];
-
-				if grant.is_canceled {
-					continue;
-				} 
-
-				grant.matching_fund = round.matching_fund * grant_clrs[i] / total_clr;
+			if total_clr != (0 as u32).into() {
+				for i in 0..grants.len() {
+					let grant = &mut grants[i];
+	
+					if grant.is_canceled {
+						continue;
+					} 
+	
+					grant.matching_fund = round.matching_fund * grant_clrs[i] / total_clr;
+				}
 			}
 
 			round.is_finalized = true;
@@ -396,6 +406,9 @@ decl_module! {
 		#[weight = 10_000 + T::DbWeight::get().reads_writes(2,1)]
 		pub fn contribute(origin, project_index: ProjectIndex, value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
+			ensure!(value > (0 as u32).into(), Error::<T>::InvalidParam);
+			let project_count = ProjectCount::get();
+			ensure!(project_index < project_count, Error::<T>::InvalidParam);
 			let now = <frame_system::Module<T>>::block_number();
 			
 			// round list must be not none
@@ -466,6 +479,7 @@ decl_module! {
 		pub fn approve(origin, round_index: RoundIndex, project_index: ProjectIndex) {
 			ensure_root(origin)?;
 			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
+			ensure!(round.is_finalized, Error::<T>::RoundNotFinalized);
 			ensure!(!round.is_canceled, Error::<T>::RoundCanceled);
 			let grants = &mut round.grants;
 
@@ -486,12 +500,11 @@ decl_module! {
 
 			// Can't let users vote in the cancered round
 			ensure!(!grant.is_canceled, Error::<T>::GrantCanceled);
+			ensure!(!grant.is_approved, Error::<T>::GrantApproved);
 
 			// set is_approved
 			grant.is_approved = true;
 			grant.withdrawal_period = now + <WithdrawalPeriod<T>>::get();
-
-			debug::debug!("round: {:#?}", round);
 
 			<Rounds<T>>::insert(round_index, round.clone());
 
