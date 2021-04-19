@@ -63,63 +63,35 @@
 
  ### Dispatchable Functions
 
- - `transfer` - Transfer some liquid free balance to another account.
- - `set_balance` - Set the balances of a given account. The origin of this call must be root.
+ - `create_project` - Create project.
+ - `fund` - Donate to the foundation account.
+ - `schedule_round` - Schedule a round.
+ - `cancel_round` - Cancel a round.
+ - `finalize_round` - Finalize a round. Calculate the matching funds for each project.
+ - `contribute` - Contribute a grant.
+ - `approve` - Approve project. When the project is approve, the owner of the project can withdraw funds.
+ - `Withdraw` - Withdrawal, including matching funds and crowd donation funds.
+ - `cancel` - Cancel a problematic project. When the project is cancelled, the people cannot donate to it, the foundation will not allocate funds to it, and the owner of the project will not be able to withdraw funds.
+ - `set_max_round_grants` - Set max round grants.
+ - `set_withdrawal_period` - Set withdrawal period. After the project is approved, if the project party does not withdraw the funds after the deadline, it will not be able to withdraw the funds afterwards.
+ - `set_is_identity_needed` - Set whether to check identity.
 
- ## Usage
-
- The following examples show how to use the Balances pallet in your custom pallet.
-
- ### Examples from the FRAME
-
- The Contract pallet uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
-
- ```
- use frame_support::traits::Currency;
- # pub trait Config: frame_system::Config {
- # 	type Currency: Currency<Self::AccountId>;
- # }
-
- pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
- pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
-
- # fn main() {}
- ```
-
- The Staking pallet uses the `LockableCurrency` trait to lock a stash account's funds:
-
- ```
- use frame_support::traits::{WithdrawReasons, LockableCurrency};
- use sp_runtime::traits::Bounded;
- pub trait Config: frame_system::Config {
- 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
- }
- # struct StakingLedger<T: Config> {
- # 	stash: <T as frame_system::Config>::AccountId,
- # 	total: <<T as Config>::Currency as frame_support::traits::Currency<<T as frame_system::Config>::AccountId>>::Balance,
- # 	phantom: std::marker::PhantomData<T>,
- # }
- # const STAKING_ID: [u8; 8] = *b"staking ";
-
- fn update_ledger<T: Config>(
- 	controller: &T::AccountId,
- 	ledger: &StakingLedger<T>
- ) {
- 	T::Currency::set_lock(
- 		STAKING_ID,
- 		&ledger.stash,
- 		ledger.total,
- 		WithdrawReasons::all()
- 	);
- 	// <Ledger<T>>::insert(controller, ledger); // Commented out as we don't have access to Staking's storage here.
- }
- # fn main() {}
- ```
 
  ## Genesis config
 
- The Balances pallet depends on the [`GenesisConfig`].
+Genesis config is defined in node/src/chain_spec.rs
+
+These are the default values:
+
+- init_max_round_grants: 60
+
+- init_withdrawal_period: 1000
+
+- init_is_identity_needed: false
 
  ## Assumptions
 
- * Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
+ * The number of items in each round should be less than MaxRoundGrants.
+
+ * When calling the schedule_round function, the start parameter of the new round should be greater than the end of the last valid round.
+
