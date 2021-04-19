@@ -1,6 +1,6 @@
- # Balances Pallet
+ # Open Grant Pallet
 
- The Balances pallet provides functionality for handling accounts and balances.
+ The Open Grant pallet provides functionality for handling accounts and balances.
 
  ## Overview
 
@@ -58,6 +58,18 @@
  - [`Imbalance`](frame_support::traits::Imbalance): Functions for handling
  imbalances between total issuance in the system and account balances. Must be used when a function
  creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
+
+ ### Storages
+ 
+ The Open grant pallet saves data in these fields.
+ - `Projects` - Project list
+ - `ProjectCount` - Number of projects.
+ - `Rounds` -  Round list
+ - `RoundCount` - Number of rounds.
+ - `MaxRoundGrants` - In a round, the largest number of grants.
+ - `WithdrawalPeriod` - Withdrawal expiration period.
+ - `UnusedFund` - Unused funds.
+ - `IsIdentityNeeded` - Whether to check identity.
 
  ## Interface
 
