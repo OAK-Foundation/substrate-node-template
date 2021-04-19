@@ -99,27 +99,33 @@ End-to-end testing using Polkadot.js library to simulate developer experience fr
 Unit testing is a method to test individual units of code separately. The purpose is to separate the smallest testable parts, in this case a Rust function, and verify if they function properly in isolation. 
 
 Unit tests are categorized as below.
-approve:	5
-cancel: 5
-cancelRound: 3
-contribute: 5
-createProject: 3
-finalizeRound: 2
-fund: 2
-scheduleRound: 10
-withdraw: 5
+
+|Scenario|Number|
+|:------:|:------:|
+|approve|5|
+|cancel|5|
+|cancelRound|3|
+|contribute|5|
+|createProject|3|
+|finalizeRound|2|
+|fund|2|
+|scheduleRound|10|
+|withdraw|5|
 
 ### Functional Testing
 In functional testing, a tester is to verify the output based on the user requirements with the expected output. The main objective of Functional Testing is to check the entire pallet and the networking interface – a simulation of an end-to-end development experience.
 
 Functional tests are categorized as below.
-approve: 7
-cancel: 7
-cancelRound: 3
-contribute: 4
-finalizeRound: 3
-scheduleRound: 2
-withdraw: 7
+
+|Scenario|Number|
+|:------:|:------:|
+|approve|7|
+|cancel|7|
+|cancelRound|3|
+|contribute|4|
+|finalizeRound|3|
+|scheduleRound|2|
+|withdraw|7|
 
 #### Test Examples
 ##### 1. The first functional test
