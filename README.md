@@ -183,13 +183,13 @@ Functional tests are categorized as below.
 
 	Click `Accounts`, select `ALICE`, and send 10000 units to `DAVE`.
 	
-	![Transfer](./asset/Transfer.png)
+	![Transfer](./doc/screenshots/Transfer.png)
 	
 4. Contribute 1000 units to fund pool.
 
 	Click `Developer` -> `Extrinsics`, select the `ALICE` account, `openGrant` pallet and `fund` method, input 1000 units, then submit.
 	
-	![Fund](./asset/Fund.png)
+	![Fund](./doc/screenshots/Fund.png)
 	
 
 ##### 3. Examples
@@ -200,29 +200,29 @@ Functional tests are categorized as below.
 
 		Click `Developer` -> `Extrinsics`, select the `BOB` account, `openGrant` pallet and `createProject` method, input the project info, then submit.
 	
-		![CreateProject](./asset/CreateProject.png)
+		![CreateProject](./doc/screenshots/CreateProject.png)
 	
 		If success, you can get the project info by `Develop` -> `Chain State`, select `openGrant` pallet and `projects` method, input `ProjectIndex` with `0`.
 	
-		![ProjectInfo](./asset/ProjectInfo.png)
+		![ProjectInfo](./doc/screenshots/ProjectInfo.png)
 	
 	2. Schedule a new round by using `ALICE` account.
 
 		Click `Developer` -> `Extrinsics`, select the `ALICE` account, `sudo` pallet and `sudo` method, select `openGrant.scheduleRound` call, input the new round info (`start` should large than currrent block, and `end` should large than `start`), then submit.
 	
-		![ScheduleRound](./asset/ScheduleRound.png)
+		![ScheduleRound](./doc/screenshots/ScheduleRound.png)
 	
 		If success, you can get the round info by `Develop` -> `Chain State`, select `openGrant` pallet and `rounds` method, input `RoundIndex` with `0`.
 	
-		![RoundInfo](./asset/RoundInfo.png)
+		![RoundInfo](./doc/screenshots/RoundInfo.png)
 	
 	3. When the new round is active (current block > start and current block < end), using DAVE account to contribute 100 units to BOB's project (project_index is 0).
 
-		![Contribute](./asset/Contribute.png)
+		![Contribute](./doc/screenshots/Contribute.png)
 	
 		If success, you can get the contribute info by `Develop` -> `Chain State`, select `openGrant` pallet and `rounds` method, input `RoundIndex` with `0`.
 	
-		![ContributeInfo](./asset/ContributeInfo.png)
+		![ContributeInfo](./doc/screenshots/ContributeInfo.png)
 	
 2. **Fail test case with `withdraw` functional when the project owner (`BOB`) wants to withdraw a not approved project.**
 	
@@ -230,17 +230,17 @@ Functional tests are categorized as below.
 
     	Click `Developer` -> `Extrinsics`, select the `ALICE` account, `sudo` pallet and `sudo` method, select `openGrant.finalizeRound` call, input the ended `RoundIndex` with `0`, then submit.
 
-    	![FinalizeRound](./asset/FinalizeRound.png)
+    	![FinalizeRound](./doc/screenshots/FinalizeRound.png)
     
     	If success, you can get the finalized round info by `Develop` -> `Chain State`, select `openGrant` pallet and `rounds` method, input `RoundIndex` with `0`. You can find the `is_finalized ` is `true` now.
 	
-		![FinalizedRoundInfo](./asset/FinalizedRoundInfo.png)
+		![FinalizedRoundInfo](./doc/screenshots/FinalizedRoundInfo.png)
 		
 	2. Using `BOB` account to withdraw the project's fund.
 
 		Click `Developer` -> `Extrinsics`, select the `BOB` account, `openGrant` pallet and `withdraw` method, input the `RoundIndex` with `0` and `ProjectIndex` with `0`, then submit. After a while you can get an error, because if the project owner (`BOB`) wants to withdraw, he first needs the root account (`Alice`) appove his project.
 		
-		![WithdrawFail](./asset/WithdrawFail.png)
+		![WithdrawFail](./doc/screenshots/WithdrawFail.png)
 
 
 3. **Success test case with `withdraw` functional**
@@ -249,18 +249,18 @@ Functional tests are categorized as below.
 
 		Click `Developer` -> `Extrinsics`, select the `ALICE` account, `sudo` pallet and `sudo` method, select `openGrant.approve` call, input the finalized `RoundIndex` with `0` and need approved `ProjectIndex` with `0`, then submit.
 		
-		![Approve](./asset/Approve.png)
+		![Approve](./doc/screenshots/Approve.png)
 		
 		If success, you can get the contribute info by `Develop` -> `Chain State`, select `openGrant` pallet and `rounds` method, input `RoundIndex` with `0`. You can find the `is_approved` is `true` in `BOB`'s project now.
 		
-		![ApprovedProjectInfo](./asset/ApprovedProjectInfo.png)
+		![ApprovedProjectInfo](./doc/screenshots/ApprovedProjectInfo.png)
 		
 	2. Using `BOB` account to withdraw the project's fund.
 
 		Click `Developer` -> `Extrinsics`, select the `BOB` account, `openGrant` pallet and `withdraw` method, input the `RoundIndex` with `0` and `ProjectIndex` with `0`, then submit.
 		
-		![WithdrawSuccess](./asset/WithdrawSuccess.png)
+		![WithdrawSuccess](./doc/screenshots/WithdrawSuccess.png)
 		
 		If success, you can get the contribute info by `Develop` -> `Chain State`, select `openGrant` pallet and `rounds` method, input `RoundIndex` with `0`. You can find the `is_withdrawn ` is `true` in `BOB`'s project now and can get other informations.
 		
-		![ApprovedProjectInfo](./asset/ApprovedProjectInfo.png)
+		![ApprovedProjectInfo](./doc/screenshots/ApprovedProjectInfo.png)
