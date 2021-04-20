@@ -44,22 +44,23 @@
  - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
  locks always operate over the same funds, so they "overlay" rather than "stack".
 
- ### Implementations
-
- The Balances pallet provides implementations for the following traits. If these traits provide the functionality
- that you need, then you can avoid coupling with the Balances pallet.
-
- - [`Currency`](frame_support::traits::Currency): Functions for dealing with a
- fungible assets system.
- - [`ReservableCurrency`](frame_support::traits::ReservableCurrency):
- Functions for dealing with assets that can be reserved from an account.
- - [`LockableCurrency`](frame_support::traits::LockableCurrency): Functions for
- dealing with accounts that allow liquidity restrictions.
- - [`Imbalance`](frame_support::traits::Imbalance): Functions for handling
- imbalances between total issuance in the system and account balances. Must be used when a function
- creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-
  ### Storages
+ 
+ The Open grant pallet saves data in these fields.
+ - `Projects` - Project list
+ - `ProjectCount` - Number of projects.
+ - `Rounds` -  Round list
+ - `RoundCount` - Number of rounds.
+ - `MaxRoundGrants` - In a round, the largest number of grants.
+ - `WithdrawalPeriod` - Withdrawal expiration period.
+ - `UnusedFund` - Unused funds.
+ - `IsIdentityNeeded` - Whether to check identity.
+
+ ### Structs
+ - `Round` - Grant round.
+ - `Grant` - A grant in a round.
+ - `Contribution` - A Contribution for a grant.
+ - `Project`
  
  The Open grant pallet saves data in these fields.
  - `Projects` - Project list
@@ -75,19 +76,29 @@
 
  ### Dispatchable Functions
 
- - `create_project` - Create project.
- - `fund` - Donate to the foundation account.
- - `schedule_round` - Schedule a round.
- - `cancel_round` - Cancel a round.
- - `finalize_round` - Finalize a round. Calculate the matching funds for each project.
- - `contribute` - Contribute a grant.
- - `approve` - Approve project. When the project is approve, the owner of the project can withdraw funds.
- - `Withdraw` - Withdrawal, including matching funds and crowd donation funds.
- - `cancel` - Cancel a problematic project. When the project is cancelled, the people cannot donate to it, the foundation will not allocate funds to it, and the owner of the project will not be able to withdraw funds.
- - `set_max_round_grants` - Set max round grants.
- - `set_withdrawal_period` - Set withdrawal period. After the project is approved, if the project party does not withdraw the funds after the deadline, it will not be able to withdraw the funds afterwards.
- - `set_is_identity_needed` - Set whether to check identity.
+ - `pub fn create_project(origin, name: Vec<u8>, logo: Vec<u8>, description: Vec<u8>, website: Vec<u8>)` - Create project.
 
+ - `pub fn fund(origin, fund_balance: BalanceOf<T>)` - Donate to the foundation account.
+
+ - `pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>)` - Schedule a round.
+
+ - `pub fn cancel_round(origin, round_index: RoundIndex)` - Cancel a round.
+
+ - `pub fn finalize_round(origin, round_index: RoundIndex)` - Finalize a round. Calculate the matching funds for each project.
+
+ - `pub fn contribute(origin, project_index: ProjectIndex, value: BalanceOf<T>)` - Contribute a grant.
+
+ - `pub fn approve(origin, round_index: RoundIndex, project_index: ProjectIndex)` - Approve project. When the project is approve, the owner of the project can withdraw funds.
+
+ - `pub fn withdraw(origin, round_index: RoundIndex, project_index: ProjectIndex)` - Withdrawal, including matching funds and crowd donation funds.
+
+ - `pub fn cancel(origin, round_index: RoundIndex, project_index: ProjectIndex)` - Cancel a problematic project. When the project is cancelled, the people cannot donate to it, the foundation will not allocate funds to it, and the owner of the project will not be able to withdraw funds.
+
+ - `pub fn set_max_round_grants(origin, max_round_grants: u32)` - Set max round grants.
+
+ - `pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber)` - Set withdrawal period. After the project is approved, if the project party does not withdraw the funds after the deadline, it will not be able to withdraw the funds afterwards.
+
+ - `pub fn set_is_identity_needed(origin, is_identity_needed: bool)` - Set whether to check identity.
 
  ## Genesis config
 
