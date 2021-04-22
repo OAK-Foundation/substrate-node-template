@@ -8,6 +8,10 @@ Quadratic Funding is a common short name for [Constrained Liberal Radicalism alg
 _"Individuals make public goods contributions to projects of value to them. The amount received by the project is (proportional to) the square of the sum of the square roots of contributions received."_
 
 The mechanism is a concrete proposal for making grassroots donations something much larger by proportionately matching more towards small donations compared to large ones. It has been efficiently funding projects in the Web3 ecosystem. 
+
+A user flow and simple demonstration of the application is shown using below UML sequence diagram. 
+
+[User flow diagram on Lucid Chart](https://lucid.app/lucidchart/b9eb3034-1615-443c-9e8c-948cbfcecaf1/view)
 ## Getting Started
 
 This section explains two way of running this project, with Rust environment and with Docker
