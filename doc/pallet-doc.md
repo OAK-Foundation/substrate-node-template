@@ -1,77 +1,37 @@
- # Open Grant Pallet
+ # Quadratic Funding Pallet
 
- The Open Grant pallet provides functionality for handling accounts and balances.
-
+ The Quadratic Funding Pallet provides functionality for [the crowdfund matching mechanism explained in Web3 Open Grant #268](https://github.com/w3f/Open-Grants-Program/pull/268), including open-source project submission, funding round commencement, end user contribution and funding round finalization.
  ## Overview
 
- The Balances pallet provides functions for:
-
- - Getting and setting free balances.
- - Retrieving total, reserved and unreserved balances.
- - Repatriating a reserved balance to a beneficiary account that exists.
- - Transferring a balance between accounts (when not reserved).
- - Slashing an account balance.
- - Account creation and removal.
- - Managing total issuance.
- - Setting and managing locks.
-
  ### Terminology
+Before diving into the detailed functionality of the Quadratic Funding pallet, let us clarify the terms and concepts used in the project.
 
- - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
- "dust accounts" from filling storage. When the free plus the reserved balance (i.e. the total balance)
-   fall below this, then the account is said to be dead; and it loses its functionality as well as any
-   prior history and all information on it is removed from the chain's state.
-   No account should ever have a total balance that is strictly between 0 and the existential
-   deposit (exclusive). If this ever happens, it indicates either a bug in this pallet or an
-   erroneous raw mutation of storage.
+- **The campaign:** The crowd-funding process of Quadratic Funding. One round of campaign usually lasts four weeks.
 
- - **Total Issuance:** The total number of units in existence in a system.
+ - **Project:** The open source software program that will contribute to Polkadot society as public goods and participate in the funding campaign of the Quadratic Funding. 
 
- - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its
- total balance has become zero (or, strictly speaking, less than the Existential Deposit).
+ - **Users:** End users who are holders of Polkadot(DOT) and willing to participate in the campaign as contributors 
 
- - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only
-   balance that matters for most operations.
+ - **The Committee:** The group of judges who are responsible to reviewing applications, examining contribution result and finalizing the campaign round.
 
- - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended.
-   Reserved balance can still be slashed, but only after all the free balance has been slashed.
-
- - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
- (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
- return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
- simply dropped, it should automatically maintain any book-keeping such as total issuance.)
-
- - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
- locks always operate over the same funds, so they "overlay" rather than "stack".
-
+### Introduction
+Quadratic funding(referred to as QF) is basically a crowdfunding campaign wherein users match contributions from everyday citizens with a pool raised from bigger donors, which in this case, Web3 foundation. Each campaign usually last 4 weeks, during which users could contribute any amount to sponsor the projects they like. Prior the campaign start date, the committee of QF will view all applications of projects and vote upon what get admitted into the campaign. There usually will be 8-12 projects within each campaign but the number may vary. When the campaign concludes, users are no longer able to make contribution to projects, and the committee will review the final result. If the committee agrees with the result, they will vote the finalize the campaign, which when happens the funding amount of each project will be secured for dispensing. If the committee finds any foul play, they can vote to remove one or more projects from the campaign before finalization. Upon removal, the funding amount of the campaign will be re-calculated and re-distributed to the rest of the participating projects. After reviewing, the committee can vote to finalize the new result.
  ### Storages
  
- The Open grant pallet saves data in these fields.
- - `Projects` - Project list
+ The Quadratic Funding pallet saves data in these fields.
+ - `Projects` - List of participating projects
  - `ProjectCount` - Number of projects.
- - `Rounds` -  Round list
+ - `Rounds` -  List of the past and current round of campaigns
  - `RoundCount` - Number of rounds.
- - `MaxRoundGrants` - In a round, the largest number of grants.
- - `WithdrawalPeriod` - Withdrawal expiration period.
- - `UnusedFund` - Unused funds.
- - `IsIdentityNeeded` - Whether to check identity.
+ - `MaxGrantCountPerRound` - The maximum amount of funding one project can get from each round.
+ - `WithdrawalExpiration` - The expiration period in block number. If grant fund is not withdrawn within a long period of time the grant will expire and unfrozen for the pallet to reuse.
+ - `IsIdentityRequired` - Is identity of address required for functions, such as project submission.
 
  ### Structs
- - `Round` - Grant round.
+ - `Round` - Holds the data 
  - `Grant` - A grant in a round.
- - `Contribution` - A Contribution for a grant.
- - `Project`
- 
- The Open grant pallet saves data in these fields.
- - `Projects` - Project list
- - `ProjectCount` - Number of projects.
- - `Rounds` -  Round list
- - `RoundCount` - Number of rounds.
- - `MaxRoundGrants` - In a round, the largest number of grants.
- - `WithdrawalPeriod` - Withdrawal expiration period.
- - `UnusedFund` - Unused funds.
- - `IsIdentityNeeded` - Whether to check identity.
-
+ - `Contribution` - User contribution to a project within a campaign
+ - `Project` - An open source software program participating in the campaign
  ## Interface
 
  ### Dispatchable Functions
@@ -102,15 +62,13 @@
 
  ## Genesis config
 
-Genesis config is defined in node/src/chain_spec.rs
+Genesis config is defined in node/src/chain_spec.rs. The default values of the genesis config are:
 
-These are the default values:
+- init_max_grant_count_per_round: 60
 
-- init_max_round_grants: 60
+- init_withdrawal_expiration: 1000
 
-- init_withdrawal_period: 1000
-
-- init_is_identity_needed: false
+- init_is_identity_required: false
 
  ## Assumptions
 
