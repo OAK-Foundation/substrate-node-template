@@ -73,7 +73,7 @@ impl<AccountId, Balance: From<u32>, BlockNumber: From<u32>> Round<AccountId, Bal
 				is_approved: false,
 				is_canceled: false,
 				is_withdrawn: false,
-				withdrawal_period: (0 as u32).into(),
+				withdrawal_expiration: (0 as u32).into(),
 				matching_fund: (0 as u32).into(),
 			});
 		}
@@ -90,11 +90,11 @@ pub struct Grant<AccountId, Balance, BlockNumber> {
 	is_approved: bool,
 	is_canceled: bool,
 	is_withdrawn: bool,
-	withdrawal_period: BlockNumber,
+	withdrawal_expiration: BlockNumber,
 	matching_fund: Balance,
 }
 
-/// Grant struct
+/// The contribution users made to a grant project.
 #[derive(Encode, Decode, Default, PartialEq, Eq, Clone, Debug)]
 pub struct Contribution<AccountId, Balance> {
 	account_id: AccountId,
@@ -128,11 +128,10 @@ decl_storage! {
 		Rounds get(fn rounds): map hasher(blake2_128_concat) RoundIndex => Option<RoundOf<T>>;
 		RoundCount get(fn round_count): RoundIndex;
 
-		MaxRoundGrants get(fn max_round_grants) config(init_max_round_grants): u32;
-		WithdrawalPeriod get(fn withdrawal_period) config(init_withdrawal_period): T::BlockNumber;
+		MaxGrantCountPerRound get(fn max_grant_count_per_round) config(init_max_grant_count_per_round): u32;
+		WithdrawalExpiration get(fn withdrawal_expiration) config(init_withdrawal_expiration): T::BlockNumber;
 
-		UnusedFund get(fn unused_fund): BalanceOf<T>;
-		IsIdentityNeeded get(fn is_identity_needed) config(init_is_identity_needed): bool;
+		IsIdentityRequired get(fn is_identity_required) config(init_is_identity_required): bool;
 	}
 }
 
@@ -184,7 +183,7 @@ decl_error! {
 		RoundFinalized,
 		RoundNotFinalized,
 		GrantAmountExceed,
-		WithdrawalPeriodExceed,
+		WithdrawalExpirationExceed,
 		NotEnoughFund,
 		InvalidProjectIndexes,
 	}
@@ -207,7 +206,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			// Check if identity is required
-			let is_identity_needed = IsIdentityNeeded::get();
+			let is_identity_needed = IsIdentityRequired::get();
 			if is_identity_needed {
 				let identity = pallet_identity::Module::<T>::identity(who.clone()).ok_or(Error::<T>::IdentityNeeded)?;
 				let mut is_found_judgement = false;
@@ -250,7 +249,6 @@ decl_module! {
 		pub fn fund(origin, fund_balance: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 			ensure!(fund_balance > (0 as u32).into(), Error::<T>::InvalidParam);
-			let unused_fund = <UnusedFund<T>>::get();
 
 			// Transfer matching fund to module account
 			// No fees are paid here if we need to create this account; that's why we don't just
@@ -262,7 +260,6 @@ decl_module! {
 				ExistenceRequirement::AllowDeath,
 			)?);
 
-			<UnusedFund<T>>::put(unused_fund + fund_balance);
 			Self::deposit_event(RawEvent::FundSucceed());
 		}
 
@@ -272,12 +269,16 @@ decl_module! {
 		pub fn schedule_round(origin, start: T::BlockNumber, end: T::BlockNumber, matching_fund: BalanceOf<T>, project_indexes: Vec<ProjectIndex>) {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
-			let unused_fund = <UnusedFund<T>>::get();
-			ensure!(matching_fund <= unused_fund, Error::<T>::NotEnoughFund);
+
+			// Check whether the funds are sufficient
+			let used_fund = Self::get_used_fund();
+			let free_balance = <T as Config>::Currency::free_balance(&Self::account_id());
+
+			ensure!(free_balance - used_fund >= matching_fund, Error::<T>::NotEnoughFund);
 
 			ensure!(project_indexes.len() > 0, Error::<T>::InvalidProjectIndexes);
 			// The number of items cannot exceed the maximum
-			ensure!(project_indexes.len() <= MaxRoundGrants::get().try_into().unwrap(), Error::<T>::GrantAmountExceed);
+			ensure!(project_indexes.len() <= MaxGrantCountPerRound::get().try_into().unwrap(), Error::<T>::GrantAmountExceed);
 			// The end block must be greater than the start block
 			ensure!(end > start, Error::<T>::EndTooEarly);
 			// Both the starting block number and the ending block number must be greater than the current number of blocks
@@ -317,8 +318,6 @@ decl_module! {
 			<Rounds<T>>::insert(index, round);
 			RoundCount::put(next_index);
 
-			<UnusedFund<T>>::put(unused_fund - matching_fund);
-
 			Self::deposit_event(RawEvent::RoundCreated(index));
 		}
 
@@ -329,7 +328,6 @@ decl_module! {
 			ensure_root(origin)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let count = RoundCount::get();
-			let unused_fund = <UnusedFund<T>>::get();
 			let mut round = <Rounds<T>>::get(round_index).ok_or(Error::<T>::NoActiveRound)?;
 
 			// Ensure current round is not started
@@ -339,7 +337,6 @@ decl_module! {
 
 			round.is_canceled = true;
 			<Rounds<T>>::insert(round_index, round.clone());
-			<UnusedFund<T>>::put(unused_fund + round.matching_fund);
 
 			Self::deposit_event(RawEvent::RoundCanceled(count-1));
 		}
@@ -504,7 +501,7 @@ decl_module! {
 
 			// set is_approved
 			grant.is_approved = true;
-			grant.withdrawal_period = now + <WithdrawalPeriod<T>>::get();
+			grant.withdrawal_expiration = now + <WithdrawalExpiration<T>>::get();
 
 			<Rounds<T>>::insert(round_index, round.clone());
 
@@ -531,7 +528,7 @@ decl_module! {
 			}
 
 			let grant = found_grant.ok_or(Error::<T>::NoActiveGrant)?;
-			ensure!(now <= grant.withdrawal_period, Error::<T>::WithdrawalPeriodExceed);
+			ensure!(now <= grant.withdrawal_expiration, Error::<T>::WithdrawalExpirationExceed);
 
 			// This grant must not have distributed funds
 			ensure!(grant.is_approved, Error::<T>::GrantNotApproved);
@@ -566,7 +563,7 @@ decl_module! {
 
 			// Set is_withdrawn
 			grant.is_withdrawn = true;
-			grant.withdrawal_period = now + <WithdrawalPeriod<T>>::get();
+			grant.withdrawal_expiration = now + <WithdrawalExpiration<T>>::get();
 
 			<Rounds<T>>::insert(round_index, round.clone());
 
@@ -610,27 +607,27 @@ decl_module! {
 			Self::deposit_event(RawEvent::GrantCanceled(round_index, project_index));
 		}
 
-		/// Set max round grants
+		/// Set max grant count per round
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn set_max_round_grants(origin, max_round_grants: u32) {
+		pub fn set_max_grant_count_per_round(origin, max_grant_count_per_round: u32) {
 			ensure_root(origin)?;
-			ensure!(max_round_grants > 0, Error::<T>::InvalidParam);
-			MaxRoundGrants::put(max_round_grants);
+			ensure!(max_grant_count_per_round > 0, Error::<T>::InvalidParam);
+			MaxGrantCountPerRound::put(max_grant_count_per_round);
 		}
 
-		/// Set withdrawal period
+		/// Set withdrawal expiration
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn set_withdrawal_period(origin, withdrawal_period: T::BlockNumber) {
+		pub fn set_withdrawal_expiration(origin, withdrawal_expiration: T::BlockNumber) {
 			ensure_root(origin)?;
-			ensure!(withdrawal_period > (0 as u32).into(), Error::<T>::InvalidParam);
-			<WithdrawalPeriod<T>>::put(withdrawal_period);
+			ensure!(withdrawal_expiration > (0 as u32).into(), Error::<T>::InvalidParam);
+			<WithdrawalExpiration<T>>::put(withdrawal_expiration);
 		}
 
-		/// set is_identity_needed
+		/// set is_identity_required
 		#[weight = 10_000 + T::DbWeight::get().writes(1)]
-		pub fn set_is_identity_needed(origin, is_identity_needed: bool) {
+		pub fn set_is_identity_required(origin, is_identity_required: bool) {
 			ensure_root(origin)?;
-			IsIdentityNeeded::put(is_identity_needed);
+			IsIdentityRequired::put(is_identity_required);
 		}
 	}
 }
@@ -659,4 +656,43 @@ impl<T: Config> Module<T> {
 		projects
 	}
 
+	// Calculate used funds
+	pub fn get_used_fund() -> BalanceOf<T> {
+		let now = <frame_system::Module<T>>::block_number();
+		let mut used_fund: BalanceOf<T> = (0 as u32).into();
+		let count = RoundCount::get();
+
+		for i in 0..count {
+			let round = <Rounds<T>>::get(i).unwrap();
+
+			// The cancelled round does not occupy funds
+			if round.is_canceled {
+				continue;
+			}
+
+			let grants = &round.grants;
+
+			// Rounds that are not finalized always occupy funds
+			if !round.is_finalized {
+				used_fund += round.matching_fund;
+				continue;
+			}
+
+			for grant in grants.iter() {
+				// If the undrawn funds expire, they will be returned to the foundation.
+				if grant.is_approved && !grant.is_withdrawn && grant.withdrawal_expiration > now {
+					continue;
+				}
+
+				// Because the funds that have been withdrawn are no longer in the foundation account, they will not be recorded.
+				if grant.is_approved && grant.is_withdrawn {
+					continue;
+				}
+
+				used_fund += grant.matching_fund;
+			}
+		}
+
+		used_fund
+	}
 }
