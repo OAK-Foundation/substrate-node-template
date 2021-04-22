@@ -33,9 +33,49 @@ When the campaign concludes, users are no longer able to make contribution to pr
 
  ### Structs
  - `Round` - Holds the data for each campaign. There is only one campaign can happen at any given time.
+    ```
+    pub struct Round<AccountId, Balance, BlockNumber> {
+      start: BlockNumber,
+      end: BlockNumber,
+      matching_fund: Balance,
+      grants: Vec<Grant<AccountId, Balance, BlockNumber>>,
+      is_canceled: bool,
+      is_finalized: bool,
+    }
+    ```
+
  - `Project` - An open source software program application submitted to a campaign
+    ```
+    pub struct Project<AccountId> {
+      name: Vec<u8>,
+      logo: Vec<u8>,
+      description: Vec<u8>,
+      website: Vec<u8>,
+      owner: AccountId,
+    }
+    ```
+
  - `Grant` - When admitted into a campaign, a project becomes a grant which allows users to contribute funds to.
+    ```
+    pub struct Grant<AccountId, Balance, BlockNumber> {
+      project_index: ProjectIndex,
+      contributions: Vec<Contribution<AccountId, Balance>>,
+      is_approved: bool,
+      is_canceled: bool,
+      is_withdrawn: bool,
+      withdrawal_expiration: BlockNumber,
+      matching_fund: Balance,
+    }
+    ```
+
  - `Contribution` - The contribution users made to a grant project.
+    ```
+    pub struct Contribution<AccountId, Balance> {
+      account_id: AccountId,
+      value: Balance,
+    }
+    ```
+
  ## Interface
 
  ### Dispatchable Functions
