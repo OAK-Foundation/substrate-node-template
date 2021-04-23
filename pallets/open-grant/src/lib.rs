@@ -685,7 +685,7 @@ impl<T: Config> Module<T> {
 				}
 
 				// Because the funds that have been withdrawn are no longer in the foundation account, they will not be recorded.
-				if grant.is_approved && grant.is_withdrawn {
+				if grant.is_withdrawn {
 					continue;
 				}
 
