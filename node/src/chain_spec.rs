@@ -165,9 +165,9 @@ fn testnet_genesis(
 		pallet_elections_phragmen: Some(Default::default()),
 		pallet_treasury: Some(Default::default()),
 		pallet_open_grant: Some(OpenGrantConfig {
-			init_max_round_grants: 60,
-			init_withdrawal_period: 1000,
-			init_is_identity_needed: false,
+			init_max_grant_count_per_round: 60,
+			init_withdrawal_expiration: 1000,
+			init_is_identity_required: false,
 		}),
 	}
 }
