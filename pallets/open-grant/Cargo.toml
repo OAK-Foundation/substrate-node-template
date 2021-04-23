@@ -1,12 +1,12 @@
 [package]
 authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
-description = 'FRAME pallet template for defining custom runtime logic.'
+description = 'FRAME pallet to allocate grant funds'
 edition = '2018'
 homepage = 'https://substrate.dev'
 license = 'Unlicense'
-name = 'pallet-template'
+name = 'pallet-open-grant'
 repository = 'https://github.com/substrate-developer-hub/substrate-node-template/'
-version = '3.0.0'
+version = '0.0.1'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
@@ -21,9 +21,15 @@ version = '2.0.0'
 [dependencies]
 frame-support = { default-features = false, version = '3.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
+sp-std = { default-features = false, version = '3.0.0' }
+sp-runtime = { default-features = false, version = '3.0.0' }
+sp-core = { default-features = false, version = '3.0.0' }
+pallet-identity = { default-features = false, version = '3.0.0' }
+integer-sqrt = { default-features = false, version = '0.1.5' }
+linked-hash-map = { default-features = false, version = '0.5.4' }
+serde = { version = "1.0.119", features = ["derive"], optional = true }
 
 [dev-dependencies]
-serde = { version = "1.0.119" }
 sp-core = { default-features = false, version = '3.0.0' }
 sp-io = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
@@ -31,6 +37,7 @@ sp-runtime = { default-features = false, version = '3.0.0' }
 [features]
 default = ['std']
 std = [
+    'serde',
     'codec/std',
     'frame-support/std',
     'frame-system/std',
