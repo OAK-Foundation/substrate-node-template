@@ -29,6 +29,7 @@
       "logo": "Vec<u8>",
       "description": "Vec<u8>",
       "website": "Vec<u8>",
-      "owner": "AccountId"
+      "owner": "AccountId",
+      "create_block_number": "BlockNumber"
     }
 }

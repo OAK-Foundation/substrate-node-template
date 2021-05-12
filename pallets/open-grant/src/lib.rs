@@ -104,13 +104,14 @@ pub struct Contribution<AccountId, Balance> {
 /// Project struct
 #[derive(Encode, Decode, Default, PartialEq, Eq, Clone, Debug)]
 #[cfg_attr(feature = "std", derive(serde::Serialize))]
-pub struct Project<AccountId> {
+pub struct Project<AccountId, BlockNumber> {
 	name: Vec<u8>,
 	logo: Vec<u8>,
 	description: Vec<u8>,
 	website: Vec<u8>,
 	/// The account that will receive the funds if the campaign is successful
 	owner: AccountId,
+	create_block_number: BlockNumber,
 }
 
 // The pallet's runtime storage items.
@@ -235,6 +236,7 @@ decl_module! {
 				description: description,
 				website: website,
 				owner: who,
+				create_block_number: <frame_system::Module<T>>::block_number(),
 			};
 
 			// Add grant to list
