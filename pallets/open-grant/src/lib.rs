@@ -38,7 +38,7 @@ pub type RoundIndex = u32;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
-type ProjectOf<T> = Project<AccountIdOf<T>, BlockNumber>;
+type ProjectOf<T> = Project<AccountIdOf<T>, <T as frame_system::Config>::BlockNumber>;
 type ContributionOf<T> = Contribution<AccountIdOf<T>, BalanceOf<T>>;
 type RoundOf<T> = Round<AccountIdOf<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
 type GrantOf<T> = Grant<AccountIdOf<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
@@ -648,9 +648,9 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Get all projects
-	pub fn get_projects() -> Vec<Project<AccountIdOf<T>, BlockNumber>> {
+	pub fn get_projects() -> Vec<Project<AccountIdOf<T>, T::BlockNumber>> {
 		let len = ProjectCount::get();
-		let mut projects: Vec<Project<AccountIdOf<T>>> = Vec::new();
+		let mut projects: Vec<Project<AccountIdOf<T>, BlockNumber>> = Vec::new();
 		for i in 0..len {
 			let project = <Projects<T>>::get(i).unwrap();
 			projects.push(project);
