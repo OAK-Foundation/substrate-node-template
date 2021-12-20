@@ -36,12 +36,24 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::{Currency, ReservableCurrency};
+pub mod migrations;
+
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
+use sp_runtime::{RuntimeDebug};
+use frame_support::{
+	weights::Weight,
+	traits::{Currency, ReservableCurrency, StorageVersion},
+};
 pub use pallet::*;
 use sp_std::prelude::*;
+pub use log::{info};
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -90,6 +102,15 @@ pub mod pallet {
 		TooShort,
 		/// A name is too long.
 		TooLong,
+		StorageOverflow,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			info!("Nicks, on_runtime_upgrade");
+			migrations::v2::migrate::<T>()
+		}
 	}
 
 	/// The lookup table for names.
@@ -97,8 +118,12 @@ pub mod pallet {
 	pub(super) type NameOf<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, (Vec<u8>, BalanceOf<T>)>;
 
+	#[pallet::storage]
+	pub(super) type CountForNames<T: Config> = StorageValue<_, u32>;
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::call]
@@ -121,6 +146,12 @@ pub mod pallet {
 			};
 
 			<NameOf<T>>::insert(&sender, (name, deposit));
+			if let Some(old) = <CountForNames<T>>::get() {
+				// Increment the value read from storage; will error in the event of overflow.
+				let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
+				// Update the value in storage with the incremented result.
+				<CountForNames<T>>::put(new);
+			}
 			Ok(())
 		}
 	}
