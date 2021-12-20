@@ -279,6 +279,20 @@ impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const NickReservationFee: u128 = 100;
+	pub const MinNickLength: u32 = 8;
+	pub const MaxNickLength: u32 = 32;
+}
+
+impl pallet_nicks::Config for Runtime {
+	type Currency = Balances;
+	type ReservationFee = NickReservationFee;
+	type MinLength = MinNickLength;
+	type MaxLength = MaxNickLength;
+	type Event = Event;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime where
@@ -296,6 +310,7 @@ construct_runtime!(
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template,
+		Nicks: pallet_nicks,
 	}
 );
 
