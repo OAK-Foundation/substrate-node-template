@@ -38,7 +38,6 @@
 
 pub mod migrations;
 
-use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{RuntimeDebug};
 use frame_support::{
@@ -54,6 +53,13 @@ type BalanceOf<T> =
 
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+
+/// A nickname with a first and last part.
+#[derive(codec::Encode, codec::Decode, Default, RuntimeDebug, PartialEq, TypeInfo)]
+pub struct Nickname {
+	first: Vec<u8>,
+	last: Option<Vec<u8>>,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -113,10 +119,10 @@ pub mod pallet {
 		}
 	}
 
-	/// The lookup table for names.
+		/// The lookup table for names.
 	#[pallet::storage]
-	pub(super) type NameOf<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, (Vec<u8>, BalanceOf<T>)>;
+	pub(super) type RealnameOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, (Nickname,BalanceOf<T>)>;
 
 	#[pallet::storage]
 	pub(super) type CountForNames<T: Config> = StorageValue<_, u32>;
@@ -129,13 +135,17 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(50_000_000)]
-		pub fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
+		pub fn set_name(origin: OriginFor<T>, first: Vec<u8>, last: Option<Vec<u8>>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
-			ensure!(name.len() <= T::MaxLength::get() as usize, Error::<T>::TooLong);
+			let len = match last {
+				None => first.len(),
+				Some(ref last_name) => first.len() + last_name.len(),
+			};
 
-			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
+			ensure!(len <= T::MaxLength::get().try_into().unwrap(), Error::<T>::TooLong);
+
+			let deposit = if let Some((_, deposit)) = <RealnameOf<T>>::get(&sender) {
 				Self::deposit_event(Event::<T>::NameChanged(sender.clone()));
 				deposit
 			} else {
@@ -145,7 +155,7 @@ pub mod pallet {
 				deposit
 			};
 
-			<NameOf<T>>::insert(&sender, (name, deposit));
+			<RealnameOf<T>>::insert(&sender, (Nickname { first, last }, deposit));
 			if let Some(old) = <CountForNames<T>>::get() {
 				// Increment the value read from storage; will error in the event of overflow.
 				let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
