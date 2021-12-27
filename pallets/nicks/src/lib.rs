@@ -52,7 +52,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 /// A nickname with a first and last part.
 #[derive(codec::Encode, codec::Decode, Default, RuntimeDebug, PartialEq, TypeInfo)]
@@ -114,8 +114,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			info!("Nicks, on_runtime_upgrade");
-			migrations::v2::migrate::<T>()
+			migrations::migrate::<T>()
 		}
 	}
 
