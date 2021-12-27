@@ -31,6 +31,7 @@ pub mod v1 {
 		let item_name = b"NameOf";
 
 		// Count the number of entries in nicks.
+		// Save it in the CountForNames field.
 		let name_count = migration::storage_key_iter::<T::AccountId, (Vec<u8>,BalanceOf<T>), Twox64Concat>(module_name, item_name).count() as u32;
 		CountForNames::<T>::put(name_count);
 		reads_writes += 1;
